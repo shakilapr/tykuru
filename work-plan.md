@@ -836,7 +836,9 @@ feat(preview): preserve viewport across live revisions
 
 Normal edits feel like the current document changed instead of a whole new viewer reopening.
 
-> Frontend gates (`pnpm typecheck`/`lint`/`test`/`build`) pass with 37 tests green, including the stale-async-load race regression and the view-state helpers. Manual multipage scroll-restore requires a Windows + Visual C++ backend build — NOT TESTED ON WINDOWS.
+> Frontend gates (`pnpm typecheck`/`lint`/`test`/`build`) pass with 38 tests green, including the stale-async-load race regression and the view-state helpers. Manual multipage scroll-restore requires a Windows + Visual C++ backend build — NOT TESTED ON WINDOWS.
+
+> **Browser smoke check (dev-time aid, not committed):** a Playwright/Chrome script driving the live Vite dev server with a mocked Tauri bridge verified the Start screen, open flow, toolbar compile-status, and error banner. It caught and fixed two real wiring bugs: `useAppState` was used before `ThemeProvider` mounted at the app root (`App.tsx`), and `WorkspaceSplit` imported a stale placeholder `components/preview/PreviewPane.tsx` instead of the real `src/preview/PreviewPane.tsx` (so the PDF viewer, zoom controls, and DiagnosticBanner were dead code). A regression test now asserts the real preview pane mounts via `AppLayout`.
 
 ---
 
