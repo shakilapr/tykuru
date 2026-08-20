@@ -258,7 +258,7 @@ Create a reproducible Tauri + React project with the approved frontend stack and
 - [ ] Configure pnpm; commit exactly one package lockfile.
 - [ ] Enable strict TypeScript.
 - [ ] Install/configure Tailwind CSS.
-- [ ] Initialize shadcn/ui.
+- [ ] Initialize shadcn/ui with Base UI primitive base (shadcn default).
 - [ ] Configure Lucide React.
 - [ ] Add Vitest.
 - [ ] Add React Testing Library if component tests need it.
@@ -543,21 +543,24 @@ Create the safe boundary between Typst output and PDF.js.
 ### Implement
 
 - [ ] Add `PreviewRevision` type.
-- [ ] Validate candidate readability.
+- [ ] Validate candidate readability via bounded stable full read (read, re-stat, confirm unchanged).
 - [ ] Validate non-zero length.
-- [ ] Validate PDF signature.
-- [ ] Copy/commit candidate to immutable revision file.
+- [ ] Validate `%PDF-` signature and basic PDF sanity.
+- [ ] Write a NEW uniquely named immutable revision file fully, then close it.
+- [ ] Mark the new revision current.
 - [ ] Increment revision monotonically.
 - [ ] Store current revision in active session.
-- [ ] Retain small bounded revision set.
+- [ ] Retain small bounded revision set (candidate + current + previous is enough).
 - [ ] Safely delete old revisions.
-- [ ] Add constrained Tauri preview protocol/asset handler.
+- [ ] Add binary IPC `get_preview_pdf(session_id, revision)` returning `tauri::ipc::Response` bytes.
+- [ ] Treat `notify` events as hints; parent-directory watchers; local debounce/re-stat state machine.
 
 ### Backend tests
 
 - [ ] valid candidate commits;
 - [ ] empty file rejected;
 - [ ] non-PDF rejected;
+- [ ] still-being-written candidate does not publish a partial revision;
 - [ ] revisions increase monotonically;
 - [ ] stale `SessionId` cannot publish;
 - [ ] unknown session/revision cannot be served;
@@ -587,7 +590,7 @@ Display a committed Typst PDF inside Tykuru.
 - [ ] Add pinned `pdfjs-dist`.
 - [ ] Configure PDF.js worker for Vite/Tauri.
 - [ ] Create `PdfViewer` React component.
-- [ ] Connect committed revision URL to viewer.
+- [ ] Load committed revision via `get_preview_pdf` binary IPC into `getDocument({ data })`; no custom preview URL.
 - [ ] Add page-width scale.
 - [ ] Add continuous vertical pages.
 - [ ] Add zoom controls.
@@ -600,7 +603,7 @@ Display a committed Typst PDF inside Tykuru.
 
 - [ ] stale session preview event ignored;
 - [ ] older revision event ignored;
-- [ ] revision URL changes with revision;
+- [ ] requested revision identity changes with revision;
 - [ ] viewer load failure produces controlled UI state.
 
 ### Manual/E2E
@@ -801,6 +804,8 @@ Do not add LSP/completion yet.
 
 ### Backend save API
 
+Implement a dedicated `SourceWriter` save transaction rather than a bare `std::fs::write`.
+
 Conceptually:
 
 ```text
@@ -812,6 +817,8 @@ Not:
 ```text
 write_file(path, data)
 ```
+
+The transaction revalidates the expected disk revision, prepares a replacement (temp sibling / safe write), performs a final revision check, commits (atomic replace where practical), and records the self-write identity. Tykuru detects external-edit conflicts and never knowingly overwrites a newer disk revision; it does not aggressively lock the source file so it stays a good citizen alongside other editors.
 
 ### Frontend tests
 
@@ -828,7 +835,9 @@ write_file(path, data)
 - [ ] stale session save rejected;
 - [ ] Unicode round-trip preserved;
 - [ ] write error returned structurally;
-- [ ] expected disk revision validated.
+- [ ] expected disk revision validated;
+- [ ] external modification during save gap is detected, not silently overwritten;
+- [ ] source write uses safe/atomic persistence (no truncated in-place overwrite).
 
 ### E2E
 
@@ -1156,6 +1165,8 @@ Ctrl+\       Toggle editor if conflict-free on target keyboards
 - [ ] theme selection;
 - [ ] remember editor split ratio;
 - [ ] remember window state where practical;
+- [ ] typed `SettingsV1` struct serialized to JSON;
+- [ ] atomic/safe settings persistence (temp sibling + replace);
 - [ ] compact diagnostic presentation;
 - [ ] sensible focus management;
 - [ ] minimum window sizes;
@@ -1335,7 +1346,7 @@ Produce what a normal Windows user installs.
 - [ ] build optimized Tauri release binary;
 - [ ] build NSIS installer;
 - [ ] optionally build MSI later;
-- [ ] determine appropriate WebView2 deployment strategy;
+- [ ] WebView2 strategy: Evergreen WebView2 with bootstrapper fallback (not a fixed runtime);
 - [ ] generate SHA-256 for release artifacts.
 
 ### Clean Windows VM matrix
@@ -1394,13 +1405,14 @@ A non-developer can install and use Tykuru on clean Windows.
 
 - [ ] frontend cannot spawn arbitrary processes;
 - [ ] frontend cannot write arbitrary paths;
-- [ ] preview protocol cannot traverse/read arbitrary files;
+- [ ] preview delivery is identity-addressed and cannot traverse/read arbitrary files;
 - [ ] cache cleanup is root-bounded;
 - [ ] CSP reviewed;
 - [ ] external URL behavior reviewed;
 - [ ] launch args are never shell-interpolated;
 - [ ] bundled Typst comes from controlled official source;
-- [ ] dependency audit reviewed.
+- [ ] dependency audit reviewed;
+- [ ] settings persisted atomically (no corruptible in-place overwrite).
 
 ### Performance measurements
 

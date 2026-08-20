@@ -167,24 +167,30 @@ Cross-platform-friendly implementation is preferred, but a feature affecting pro
 |---|---|---|
 | Desktop shell | Tauri 2 | Native desktop runtime and packaging |
 | Backend | Rust | Process, filesystem, sessions, cache, Windows integration |
+| Async execution | Tauri async runtime (Tokio-based) | Application concurrency; no separate owned runtime |
+| Cancellation | `tokio-util::CancellationToken` | Optional, resource cleanup only |
 | Frontend framework | React | UI composition and stateful components |
 | Language | TypeScript | Typed frontend implementation |
 | Frontend build | Vite | Development/build pipeline |
 | Styling | Tailwind CSS | Consistent utility-based styling |
 | UI primitives | shadcn/ui | Reusable accessible UI components |
+| Primitive base | Base UI (shadcn default) | Underlying accessible component primitives |
 | Icons | Lucide React | One consistent icon family |
 | Editor | CodeMirror 6 | Lightweight optional source editor |
 | Typst engine | Official Typst CLI sidecar | Compilation and watch mode |
 | Preview format | PDF | Native Typst output |
-| Preview engine | PDF.js / `pdfjs-dist` | Document rendering, text, links, search |
+| Preview engine | PDF.js / `pdfjs-dist` (pinned) | Document rendering, text, links, search |
+| Preview delivery | Tauri binary IPC (`tauri::ipc::Response`) | Identity-addressed PDF bytes to WebView |
 | Native file dialog | Tauri dialog plugin | Open `.typ` / choose project root |
 | Single instance | Tauri single-instance plugin | Route later launches to existing app |
-| Filesystem notifications | Rust `notify` | Observe candidate PDF and editor source state |
-| Settings | Small local JSON/Tauri store | UI state, recent files, root overrides |
+| Filesystem notifications | Rust `notify` (parent-directory watchers) | Hint that candidate PDF / source may have changed |
+| Settings | Typed serde JSON + safe/atomic persistence | UI state, recent files, root overrides |
+| Logging | `log` + `tauri-plugin-log` | File/stdout diagnostics with identifiers |
 | Unit tests | Vitest + Rust tests | Frontend/backend logic |
 | UI tests | React Testing Library where useful | Component behavior |
 | Desktop E2E | Tauri-supported WebDriver/WebdriverIO path | Windows application flows |
 | Installer | Tauri NSIS | Primary Windows installer |
+| Web runtime | Evergreen WebView2 (bootstrapper fallback) | Windows webview dependency |
 
 ### 4.1 Dependencies intentionally not approved
 
@@ -199,7 +205,16 @@ Do not add another equivalent stack without explicit architecture approval:
 - Redux/Zustand by default;
 - React Router by default;
 - a second PDF renderer;
-- a second Typst implementation.
+- a second Typst implementation;
+- linking the Typst compiler as a Rust library instead of the CLI sidecar;
+- WebView2 native PDF viewer as the primary preview;
+- a second async runtime the application owns;
+- mandatory `tracing` span infrastructure before it is needed;
+- CSS-in-JS / styled-components / a second design system.
+
+### 4.2 Frozen primitive base
+
+shadcn/ui primitives are backed by Base UI by default for new Tykuru scaffolding. Radix and React Aria remain supported; do not mix primitive foundations per-component unless a concrete component limitation forces it.
 
 ---
 
@@ -222,10 +237,11 @@ Do not add another equivalent stack without explicit architecture approval:
 │  │       ▼                                                       │  │
 │  │ SessionManager                                                │  │
 │  │       │                                                       │  │
-│  │       ├── SourceService                                       │  │
+│  │       ├── SourceService (SourceWriter)                        │  │
 │  │       ├── ProjectRootService                                  │  │
 │  │       ├── CompilerService ────────┐                           │  │
 │  │       ├── PreviewRevisionStore    │                           │  │
+│  │       ├── PreviewDelivery         │                           │  │
 │  │       ├── DiagnosticState         │                           │  │
 │  │       ├── SettingsStore           │                           │  │
 │  │       └── ShutdownCoordinator     │                           │  │
@@ -238,11 +254,18 @@ Do not add another equivalent stack without explicit architecture approval:
 │                         typst watch entry.typ candidate.pdf         │
 │                                      │                              │
 │                                      ▼                              │
-│                             candidate PDF                           │
+│                       candidate PDF (notify hint)                   │
 │                                      │                              │
-│                           verify + commit revision                  │
+│                      stable full read + sanity check               │
 │                                      │                              │
-│                                      ▼                              │
+│                           write NEW immutable revision              │
+│                                      │                              │
+│                          preview-updated(id, n)                     │
+│                                      │                              │
+│                          get_preview_pdf(id, n)                     │
+│                                      │                              │
+│                           binary Tauri IPC                          │
+│                                      │                              │
 │  ┌────────────────────── REACT WEBVIEW FRONTEND ─────────────────┐ │
 │  │                                                                │ │
 │  │ App                                                            │ │
@@ -250,7 +273,7 @@ Do not add another equivalent stack without explicit architecture approval:
 │  │ ├── Resizable split layout                                     │ │
 │  │ ├── CodeMirror editor (optional)                               │ │
 │  │ ├── diagnostics                                                │ │
-│  │ └── PDF.js preview                                             │ │
+│  │ └── PDF.js preview (getDocument({ data }))                     │ │
 │  │                                                                │ │
 │  └────────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────┘
@@ -353,17 +376,18 @@ tykuru/
 │     ├─ preview/
 │     │  ├─ mod.rs
 │     │  ├─ revisions.rs
-│     │  └─ protocol.rs
+│     │  └─ delivery.rs             # binary IPC get_preview_pdf
 │     │
 │     ├─ source/
 │     │  ├─ mod.rs
 │     │  ├─ read.rs
-│     │  ├─ write.rs
+│     │  ├─ write.rs                # SourceWriter save transaction
 │     │  └─ external_watch.rs
 │     │
 │     ├─ settings/
 │     │  ├─ mod.rs
-│     │  └─ store.rs
+│     │  ├─ model.rs                # typed SettingsV1 struct
+│     │  └─ store.rs                # atomic/safe persistence
 │     │
 │     └─ commands/
 │        ├─ mod.rs
@@ -537,6 +561,8 @@ Opening another `.typ` cleanly tears down the previous session before the new se
 
 ### 8.3 Async ownership
 
+Tykuru runs on Tauri's async runtime; it does not create or conceptually own a separate Tokio runtime. Where useful, Tokio ecosystem primitives (for example `tokio-util::CancellationToken`) may be used underneath it.
+
 Every session-specific asynchronous event must carry the `SessionId`.
 
 This includes:
@@ -548,6 +574,16 @@ This includes:
 - save operations where relevant.
 
 A stale event from an old session must be rejected.
+
+Correct correctness hierarchy:
+
+```text
+SessionId checking      correctness (stale results discarded regardless of cancellation)
+CancellationToken       resource cleanup
+task handles             orderly shutdown
+```
+
+Cancellation is not instantaneous, so `SessionId`-based rejection remains the primary correctness guarantee even after a task is cancelled.
 
 ---
 
@@ -681,11 +717,13 @@ Rules:
 
 - launch the binary directly, never through `cmd.exe` or PowerShell;
 - pass arguments separately;
-- retain the child handle;
+- retain the child handle (`CommandChild`) in `CompilerProcess`;
 - capture stderr/stdout;
 - terminate the old child before replacing the session;
-- terminate child on shutdown;
+- terminate child on shutdown via `ShutdownCoordinator`;
 - do not allow two watcher children for one active session.
+
+A bundled sidecar does not automatically solve process lifecycle. Add an explicit Windows acceptance test covering application upgrade / reinstall / shutdown leaving no `typst.exe` process behind; do not trust framework abstraction for sidecar lifecycle around installers/updaters.
 
 ### 11.3 Why `typst watch`
 
@@ -733,16 +771,32 @@ PDF.js loads committed revision only
 
 ### 12.1 Candidate verification
 
+A `notify` event is only a hint that the candidate *might* have changed. It is never evidence that Typst has finished writing the file; `%PDF-` can already be present in a still-being-written file.
+
 On candidate change:
 
 1. confirm event belongs to active `SessionId`;
-2. wait/retry a short bounded period for a stable readable file;
-3. require non-zero length;
-4. verify `%PDF-` signature;
-5. create a new immutable revision;
-6. atomically mark it current;
-7. emit `preview-updated(sessionId, revision)`;
-8. safely garbage-collect old revisions.
+2. debounce/coalesce the hint;
+3. perform a bounded stable full read (read fully, re-stat, confirm unchanged within a short window);
+4. require non-zero length;
+5. verify `%PDF-` signature and basic PDF sanity;
+6. write a brand-new uniquely named revision file fully, then close it;
+7. mark the new revision current;
+8. emit `preview-updated(sessionId, revision)`;
+9. safely garbage-collect old revisions.
+
+Because the revision filename is new, it is never exposed while being written. No Rust PDF parser is introduced; Typst remains responsible for valid PDF.
+
+#### Notify watching strategy
+
+Watch parent directories non-recursively rather than watching single files. Editors save differently: some truncate in place, others replace the file via rename. Watching a parent directory produces less surprising behavior for both cases.
+
+- watch `parent(entry.typ)` non-recursively, filter events involving `entry.typ`;
+- watch the session cache directory for `candidate.pdf`;
+- treat `Modify`/`Create`/`Remove`/`Rename` mostly as "something relevant may have happened; re-evaluate authoritative state";
+- a small local debounce/re-stat state machine is preferred over `notify-debouncer-full` for the tiny number of interesting files.
+
+`notify` must never evolve into a second Typst build/dependency system.
 
 ### 12.2 Revision ordering
 
@@ -777,30 +831,41 @@ The last committed PDF stays visible.
 
 Do not expose arbitrary filesystem paths to the frontend.
 
-Use a constrained preview protocol or another Tauri-approved asset mechanism addressed by identity, not path.
+v1 uses raw binary IPC rather than a custom preview protocol. Tauri's `tauri::ipc::Response` returns file bytes as an `ArrayBuffer` without JSON serialization, and PDF.js consumes in-memory `Uint8Array` data through `getDocument({ data })`.
 
-Conceptual URL:
+Flow:
 
 ```text
-tykuru-preview://localhost/session/<session-id>/revision/<n>.pdf
+preview-updated(sessionId, revision)
+              ↓
+frontend asks for revision
+              ↓
+get_preview_pdf(sessionId, revision)
+              ↓
+Rust validates SessionId + revision
+              ↓
+returns binary IPC Response (ArrayBuffer)
+              ↓
+PDF.js getDocument({ data })
 ```
-
-The Rust handler resolves the identity to an internally known revision file.
 
 Security requirements:
 
 - reject unknown session;
 - reject unknown revision;
-- reject traversal;
-- never accept an arbitrary source path from the URL;
-- return PDF content type;
-- avoid stale browser caching.
+- never accept an arbitrary source path from the frontend;
+- no browser URL caching of preview content;
+- no arbitrary filesystem exposure or traversal.
+
+A custom range-capable protocol (`PDFDataRangeTransport`) is deferred until a `fixtures/large` benchmark demonstrates a real transfer/overhead problem. The boundary stays identity-addressed, never path-addressed.
 
 ---
 
 ## 14. PDF.js viewer architecture
 
 The viewer should remain minimal.
+
+Use PDF.js's tested display/viewer machinery wherever possible; Tykuru controls the surrounding toolbar/state rather than reimplementing a viewer from raw primitives. Pin the `pdfjs-dist` version and include selection/search/view-state behavior in the fixture/E2E suite, since PDF.js has had regressions in those areas.
 
 v1 features:
 
@@ -860,23 +925,43 @@ Do not block v1 on LSP/completion.
 
 ```text
 CodeMirror transaction
-       ↓
+        ↓
 frontend dirty state
-       ↓
+        ↓
 200–300 ms debounce
-       ↓
+        ↓
 save_source(sessionId, text, expectedDiskRevision)
-       ↓
+        ↓
 Rust validates session and disk revision
-       ↓
+        ↓
+SourceWriter save transaction
+        ↓
 write active entry file
-       ↓
+        ↓
 Typst watch recompiles
-       ↓
+        ↓
 new preview revision
 ```
 
 The frontend must not receive an unrestricted `write_file(path, contents)` command.
+
+Source-write semantics are a dedicated, tested abstraction (`SourceWriter`), not a buried `std::fs::write`. Conceptually:
+
+```text
+receive expected disk revision
+        ↓
+revalidate disk immediately
+        ↓
+prepare replacement through temp sibling / safe write
+        ↓
+final revision check
+        ↓
+commit (atomic replace where practical)
+        ↓
+record self-write identity
+```
+
+The check-then-write gap is a TOCTOU race; Tykuru detects all normal external-edit conflicts and never knowingly overwrites a newer disk revision. It avoids aggressive Windows write-locking so it remains a good citizen alongside VS Code/Zed/etc.
 
 ### 15.3 Self-write detection
 
@@ -945,7 +1030,23 @@ Cache deletion code requires explicit root-boundary tests.
 
 ## 18. Settings
 
-Keep settings small.
+Keep settings small and strongly typed.
+
+Represent settings as a typed Rust struct serialized to JSON:
+
+```rust
+struct SettingsV1 {
+    version: u32,
+    theme: Theme,
+    editor_visible: bool,
+    split_ratio: f64,
+    recent_files: BoundedRecentFiles,
+    root_overrides: RootOverrideMap,
+    // optional custom Typst font paths if implemented
+}
+```
+
+This gives compile-time structure and an explicit migration point. Tauri Store is acceptable if minimizing custom code is preferred over explicit schema typing, but the typed-struct approach is preferred.
 
 Allowed v1 settings include:
 
@@ -956,6 +1057,8 @@ Allowed v1 settings include:
 - bounded recent files list;
 - project-root override by canonical entry path;
 - optional custom Typst font paths if implemented.
+
+Persist safely. A direct in-place overwrite can corrupt `settings.json` on crash. Use a temporary sibling file, flush, then atomic replace (or a mature atomic-write helper). This is inexpensive robustness; defaults remain a safe fallback.
 
 Do not store document contents.
 
@@ -1059,7 +1162,7 @@ Required controls:
 - narrow Tauri permissions;
 - no arbitrary frontend process spawning;
 - no arbitrary frontend filesystem access;
-- no path traversal in preview protocol;
+- no path traversal in preview delivery (identity-addressed, never path-addressed);
 - cache cleanup stays under cache root;
 - external link opening is deliberate;
 - no Tykuru-owned upload/network behavior;
@@ -1094,7 +1197,7 @@ A Typst syntax error must never terminate Tykuru.
 
 ## 23. Logging
 
-Use structured Rust logging.
+Use normal Rust `log` integration with `tauri-plugin-log`. This provides `error`/`warn`/`info`/`debug`/`trace` levels, file and stdout logging, without requiring `tracing` span infrastructure. Introduce `tracing` later only if genuinely needed for structured spans/profiling.
 
 Suggested levels:
 
@@ -1103,6 +1206,13 @@ Suggested levels:
 - `info` — session/compiler lifecycle;
 - `debug` — revision/watch details;
 - `trace` — very noisy development diagnostics.
+
+Include identifying context in important entries:
+
+- `session_id`;
+- `revision`;
+- entry path name/hash where safe;
+- compiler pid.
 
 Never log full document contents or editor buffers by default.
 
@@ -1437,29 +1547,32 @@ Windows Explorer / File Dialog / Drag-Drop
                     ▼
               DocumentSession
                     │
-        ┌───────────┴────────────┐
-        │                        │
-        ▼                        ▼
- SourceService             CompilerService
- CodeMirror save           official Typst CLI
-        │                        │
-        └────── main.typ ────────┘
-                                 │
-                         typst watch output
-                                 │
-                                 ▼
-                           candidate.pdf
-                                 │
-                         validate + commit
-                                 │
-                                 ▼
-                      immutable PDF revision
-                                 │
-                                 ▼
-                             PDF.js
-                                 │
-                                 ▼
-                        React + shadcn UI
+         ┌───────────┴────────────┐
+         │                        │
+         ▼                        ▼
+  SourceService             CompilerService
+  SourceWriter save         official Typst CLI
+         │                        │
+         └────── main.typ ────────┘
+                                  │
+                          typst watch output
+                                  │
+                                  ▼
+                       candidate.pdf (notify hint)
+                                  │
+                  stable read + sanity + NEW revision
+                                  │
+                       preview-updated(id, n)
+                                  │
+                       get_preview_pdf(id, n)
+                                  │
+                       binary Tauri IPC
+                                  │
+                                  ▼
+                              PDF.js
+                                  │
+                                  ▼
+                         React + shadcn UI
 ```
 
 The central rule is:
