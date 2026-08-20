@@ -1,12 +1,12 @@
 //! Tykuru backend entry point.
 
-mod app_state;
-mod commands;
-mod compiler;
-mod open_request;
-mod preview;
-mod session;
-mod shutdown;
+pub mod app_state;
+pub mod commands;
+pub mod compiler;
+pub mod open_request;
+pub mod preview;
+pub mod session;
+pub mod shutdown;
 
 use app_state::AppState;
 

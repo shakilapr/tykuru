@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use crate::app_state::AppState;
 use crate::session::SessionId;
@@ -17,7 +17,11 @@ use crate::session::SessionId;
 const DIAGNOSTIC_LIMIT: usize = 4 * 1024;
 
 /// UI-facing compile state for a session.
+///
+/// `Idle` is part of the designed state model (architecture §11.4) and is
+/// reached by stages that reset state on session close; not yet produced here.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[allow(dead_code)]
 pub enum CompileState {
     Idle,
     Compiling,
@@ -34,12 +38,16 @@ pub enum CompileState {
 ///
 /// `last_good_revision` is read from the revision registry so an `Error` never
 /// rolls back the displayed document (architecture §12.3).
-pub fn set_compile_state(app: &AppHandle, session_id: &SessionId, state: CompileState) {
+pub fn set_compile_state<R: Runtime>(
+    app: &AppHandle<R>,
+    session_id: &SessionId,
+    state: CompileState,
+) {
+    let app_state = app.state::<AppState>();
     let last_good = match &state {
         CompileState::Error { .. } => {
-            let reg = app.state::<AppState>().revision_registry.lock().ok();
-            reg.and_then(|r| r.store(session_id))
-                .and_then(|s| s.current())
+            let reg = app_state.revision_registry.lock().ok();
+            reg.and_then(|r| r.store(session_id).and_then(|s| s.current()))
         }
         _ => None,
     };
@@ -51,17 +59,18 @@ pub fn set_compile_state(app: &AppHandle, session_id: &SessionId, state: Compile
         other => other.clone(),
     };
 
-    {
-        let state_map = &app.state::<AppState>().compile_states;
-        if let Ok(mut map) = state_map.lock() {
-            map.insert(session_id.clone(), emitted.clone());
-        }
+    if let Ok(mut map) = app_state.compile_states.lock() {
+        map.insert(session_id.clone(), emitted.clone());
     }
     let _ = app.emit("compile-state-changed", (session_id.as_str(), emitted));
 }
 
 /// Reads a session's current compile state, if known.
-pub fn get_compile_state(app: &AppHandle, session_id: &SessionId) -> Option<CompileState> {
+#[allow(dead_code)]
+pub fn get_compile_state<R: Runtime>(
+    app: &AppHandle<R>,
+    session_id: &SessionId,
+) -> Option<CompileState> {
     app.state::<AppState>()
         .compile_states
         .lock()
@@ -89,6 +98,8 @@ impl CompileStateRegistry {
     pub fn insert(&mut self, id: SessionId, state: CompileState) {
         self.states.insert(id, state);
     }
+    /// Reads a session's stored compile state (used by diagnostics/reset paths).
+    #[allow(dead_code)]
     pub fn get(&self, id: &SessionId) -> Option<&CompileState> {
         self.states.get(id)
     }

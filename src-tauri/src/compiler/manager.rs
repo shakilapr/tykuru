@@ -4,7 +4,7 @@ use std::sync::Mutex;
 
 use tokio_util::sync::CancellationToken;
 
-use super::sidecar::{compile_once, CompilerError, CompilerProcess};
+use super::sidecar::CompilerProcess;
 use crate::session::SessionId;
 
 /// Owns the single running `typst watch` child for the active session.
@@ -15,6 +15,8 @@ use crate::session::SessionId;
 /// (architecture §8.3).
 pub struct CompilerManager {
     process: Mutex<Option<CompilerProcess>>,
+    /// Cancellation token reserved for `ShutdownCoordinator` teardown.
+    #[allow(dead_code)]
     token: CancellationToken,
 }
 
@@ -28,9 +30,9 @@ impl CompilerManager {
 
     /// Spawns a watcher for `session_id`. Returns an error if a watcher is
     /// already running (no duplicate child allowed).
-    pub fn start(
+    pub fn start<R: tauri::Runtime>(
         &self,
-        app: &tauri::AppHandle,
+        app: &tauri::AppHandle<R>,
         session_id: &SessionId,
     ) -> Result<(), CompilerError> {
         let mut guard = self.process.lock().map_err(|_| CompilerError::Killed)?;
@@ -49,29 +51,38 @@ impl CompilerManager {
 
     /// Stops the running watcher (if any) and waits for it to exit.
     pub fn stop(&self) -> Result<(), CompilerError> {
-        let proc = self
+        let mut proc = self
             .process
             .lock()
             .map_err(|_| CompilerError::Killed)?
             .take();
-        if let Some(p) = proc {
+        if let Some(p) = proc.as_mut() {
             p.stop()?;
         }
         Ok(())
     }
 
     /// True when a watcher is currently running.
+    #[allow(dead_code)]
     pub fn is_running(&self) -> bool {
         self.process.lock().map(|g| g.is_some()).unwrap_or(false)
     }
 
     /// Cancels the shutdown token (used by `ShutdownCoordinator`).
+    #[allow(dead_code)]
     pub fn cancel(&self) {
         self.token.cancel();
     }
 
+    #[allow(dead_code)]
     pub fn token(&self) -> CancellationToken {
         self.token.clone()
+    }
+}
+
+impl Default for CompilerManager {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

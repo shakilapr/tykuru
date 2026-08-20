@@ -5,7 +5,7 @@
 //! is never retrievable afterward. This identity is what lets later stages
 //! reject stale compiler/preview events from a closed session.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::model::{DocumentSession, SessionId};
 

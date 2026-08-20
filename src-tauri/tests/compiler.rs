@@ -20,7 +20,7 @@ fn fixture(name: &str) -> PathBuf {
         .join("main.typ")
 }
 
-fn build_app() -> tauri::AppHandle {
+fn build_app() -> tauri::AppHandle<tauri::test::MockRuntime> {
     let app = mock_builder()
         .plugin(tauri_plugin_shell::init())
         .manage(tykuru_lib::app_state::AppState::default())
@@ -29,7 +29,7 @@ fn build_app() -> tauri::AppHandle {
     app.handle().clone()
 }
 
-fn open(app: &tauri::AppHandle, fixture_name: &str) -> SessionId {
+fn open(app: &tauri::AppHandle<tauri::test::MockRuntime>, fixture_name: &str) -> SessionId {
     let entry = fixture(fixture_name);
     let state = app.state::<tykuru_lib::app_state::AppState>();
     let cache_root = state.cache_root.clone();
@@ -38,7 +38,11 @@ fn open(app: &tauri::AppHandle, fixture_name: &str) -> SessionId {
 }
 
 /// Waits until the session has published at least `min` revisions.
-fn wait_for_revisions(app: &tauri::AppHandle, session_id: &SessionId, min: u64) {
+fn wait_for_revisions(
+    app: &tauri::AppHandle<tauri::test::MockRuntime>,
+    session_id: &SessionId,
+    min: u64,
+) {
     let state = app.state::<tykuru_lib::app_state::AppState>();
     for _ in 0..100 {
         if let Some(store) = state.revision_registry.lock().unwrap().store(session_id) {
@@ -55,7 +59,7 @@ fn valid_fixture_compiles_and_writes_candidate() {
     let app = build_app();
     let id = open(&app, "basic");
 
-    let outcome = compile_once(&app, &id).expect("compile_once");
+    let outcome = tauri::async_runtime::block_on(compile_once(&app, &id)).expect("compile_once");
     assert!(outcome.success, "stderr: {}", outcome.stderr);
 
     let state = app.state::<tykuru_lib::app_state::AppState>();
@@ -78,7 +82,7 @@ fn invalid_fixture_fails_with_diagnostic() {
     let app = build_app();
     let id = open(&app, "errors");
 
-    let outcome = compile_once(&app, &id).expect("compile_once");
+    let outcome = tauri::async_runtime::block_on(compile_once(&app, &id)).expect("compile_once");
     assert!(!outcome.success, "expected failure for errors fixture");
     assert!(!outcome.stderr.is_empty(), "diagnostic should be captured");
     assert!(outcome.exit_code.is_some());
@@ -90,7 +94,7 @@ fn compile_rejects_stale_session_id() {
     let _id = open(&app, "basic");
     let stale = SessionId::generate();
     assert!(
-        compile_once(&app, &stale).is_err(),
+        tauri::async_runtime::block_on(compile_once(&app, &stale)).is_err(),
         "stale session id must be rejected"
     );
 }

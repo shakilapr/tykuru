@@ -5,7 +5,7 @@
 //! returns its bytes as an `ArrayBuffer` (architecture §13). Unknown session or
 //! revision is rejected; resolution can never escape the session cache root.
 
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use crate::app_state::AppState;
 use crate::session::SessionId;
@@ -26,8 +26,8 @@ pub enum DeliveryError {
 ///
 /// Resolved only by session/revision identity; the path is internal. Rejects
 /// stale/unknown sessions and unpublished revisions before any filesystem read.
-pub fn get_preview_pdf(
-    app: &AppHandle,
+pub fn get_preview_pdf<R: Runtime>(
+    app: &AppHandle<R>,
     session_id: &SessionId,
     revision: u64,
 ) -> Result<Vec<u8>, DeliveryError> {
@@ -62,6 +62,6 @@ pub fn get_preview_pdf(
 
 /// Emits `preview-updated` after a successful commit. The name lives next to
 /// delivery; the frontend consumes it in Stage 5.
-pub fn emit_preview_updated(app: &AppHandle, session_id: &SessionId, revision: u64) {
+pub fn emit_preview_updated<R: Runtime>(app: &AppHandle<R>, session_id: &SessionId, revision: u64) {
     let _ = app.emit("preview-updated", (session_id.as_str(), revision));
 }

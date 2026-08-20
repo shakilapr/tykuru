@@ -4,13 +4,17 @@
 //! the same sidecar primitive. Typst is launched only through the Tauri shell
 //! plugin's sidecar API with arguments passed separately — never via a shell
 //! string, `cmd.exe`, `powershell`, or `sh` (architecture §11.2, §6.2.1).
+//!
+//! API note: `tauri-plugin-shell` 2.x `spawn()` returns `(Receiver<CommandEvent>,
+//! CommandChild)`; stdout/stderr arrive as `CommandEvent` variants on the
+//! receiver. `CommandChild` has no `wait()`/`stderr()`; termination is signalled
+//! via `CommandEvent::Terminated` and `kill()` is synchronous on the child.
 
-use std::io::Read;
 use std::path::PathBuf;
 
 use serde::Serialize;
-use tauri::Manager;
-use tauri_plugin_shell::process::{CommandChild, Stdio};
+use tauri::{AppHandle, Manager, Runtime};
+use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
 /// Bounded diagnostic buffer so a chatty compiler cannot exhaust memory.
@@ -29,8 +33,6 @@ pub struct CompileOutcome {
 pub enum CompileError {
     #[error("failed to spawn typst sidecar: {0}")]
     Spawn(#[source] tauri_plugin_shell::Error),
-    #[error("typst sidecar produced malformed output: {0}")]
-    Output(#[source] std::io::Error),
     #[error("no active session to compile")]
     NoActiveSession,
     #[error("typst process killed before completion")]
@@ -41,13 +43,13 @@ pub enum CompileError {
 /// candidate PDF path.
 ///
 /// `candidate.pdf` is written under the session cache dir, never into the
-/// project directory (architecture §17, Stage 3).
-pub fn compile_once(
-    app: &tauri::AppHandle,
+/// project directory (architecture §17, Stage 3). Async because the shell
+/// plugin's `output()` is async; Tauri async commands run on the runtime.
+pub async fn compile_once<R: Runtime>(
+    app: &AppHandle<R>,
     session_id: &crate::session::SessionId,
 ) -> Result<CompileOutcome, CompileError> {
     let state = app.state::<crate::app_state::AppState>();
-    let cache_root = state.cache_root.clone();
     let (entry_path, project_root, candidate_path) = {
         let manager = state
             .session_manager
@@ -77,32 +79,34 @@ pub fn compile_once(
             project_root.to_str().unwrap_or(""),
         ]);
 
-    let output = command.output().map_err(|e| CompileError::Spawn(e))?;
+    let output = command.output().await.map_err(CompileError::Spawn)?;
 
     let stderr = truncate_lossy(&output.stderr, STDERR_LIMIT);
-    let outcome = CompileOutcome {
+    Ok(CompileOutcome {
         success: output.status.success(),
         exit_code: output.status.code(),
         stderr,
-        candidate_path: candidate_path.clone(),
-    };
-    Ok(outcome)
+        candidate_path,
+    })
 }
 
 /// A running `typst watch` process for one active session.
 ///
 /// The child handle is retained so `ShutdownCoordinator` / `CompilerManager` can
-/// `kill()` it on close or app exit (architecture §11.2, §8.2).
+/// `kill()` it on close or app exit (architecture §11.2, §8.2). stderr is read
+/// from the command-event receiver on a Tauri async task.
 pub struct CompilerProcess {
+    /// Retained so tests/commands can identify the running watcher's session.
+    #[allow(dead_code)]
     pub session_id: crate::session::SessionId,
-    child: CommandChild,
+    child: Option<CommandChild>,
 }
 
 impl CompilerProcess {
     /// Spawns `typst watch <entry> <candidate.pdf> --root <project_root>` and
     /// returns the retained child. Arguments are passed separately (no shell).
-    pub fn start_watch(
-        app: &tauri::AppHandle,
+    pub fn start_watch<R: Runtime>(
+        app: &AppHandle<R>,
         session_id: &crate::session::SessionId,
     ) -> Result<Self, CompileError> {
         let (entry_path, project_root, candidate_path) = {
@@ -122,7 +126,7 @@ impl CompilerProcess {
             )
         };
 
-        let child = app
+        let (mut rx, child) = app
             .shell()
             .sidecar("typst")
             .map_err(CompileError::Spawn)?
@@ -133,7 +137,6 @@ impl CompilerProcess {
                 "--root",
                 project_root.to_str().unwrap_or(""),
             ])
-            .stderr(Stdio::piped())
             .spawn()
             .map_err(CompileError::Spawn)?;
 
@@ -141,55 +144,40 @@ impl CompilerProcess {
         // stderr. A line mentioning an error becomes an `Error` state (bounded
         // diagnostic). Successful commits flip it back to `Ready` in the output
         // watcher (architecture §11.4).
-        if let Some(mut stderr) = child.stderr() {
-            let diag_app = app.clone();
-            let diag_id = session_id.clone();
-            std::thread::spawn(move || {
-                let mut buf = Vec::new();
-                let mut byte = [0u8; 1];
-                loop {
-                    match stderr.read(&mut byte) {
-                        Ok(0) => break,
-                        Ok(_) => {
-                            buf.push(byte[0]);
-                            if byte[0] == b'\n' {
-                                let line = String::from_utf8_lossy(&buf).trim().to_string();
-                                buf.clear();
-                                if line.to_lowercase().contains("error") {
-                                    crate::compiler::diagnostic::set_compile_state(
-                                        &diag_app,
-                                        &diag_id,
-                                        crate::compiler::diagnostic::CompileState::Error {
-                                            message: crate::compiler::diagnostic::bound_diagnostic(
-                                                &line,
-                                            ),
-                                            last_good_revision: None,
-                                        },
-                                    );
-                                }
-                            }
-                        }
-                        Err(_) => break,
+        let diag_app = app.clone();
+        let diag_id = session_id.clone();
+        tauri::async_runtime::spawn(async move {
+            while let Some(event) = rx.recv().await {
+                if let CommandEvent::Stderr(line) = event {
+                    let text = String::from_utf8_lossy(&line).trim().to_string();
+                    if text.to_lowercase().contains("error") {
+                        crate::compiler::diagnostic::set_compile_state(
+                            &diag_app,
+                            &diag_id,
+                            crate::compiler::diagnostic::CompileState::Error {
+                                message: crate::compiler::diagnostic::bound_diagnostic(&text),
+                                last_good_revision: None,
+                            },
+                        );
                     }
                 }
-            });
-        }
+            }
+        });
 
         Ok(Self {
             session_id: session_id.clone(),
-            child,
+            child: Some(child),
         })
     }
 
-    /// Kills the child and waits (with a timeout) for it to exit, so the process
-    /// is guaranteed gone before shutdown completes (architecture §8.2).
-    pub fn stop(mut self) -> Result<(), CompileError> {
-        // Best-effort kill; ignore "already exited".
-        let _ = self.child.kill();
-        match self.child.wait() {
-            Ok(_) => Ok(()),
-            Err(e) => Err(CompileError::Output(e)),
+    /// Kills the child. `CommandChild::kill` consumes the handle and is
+    /// synchronous on the shared child, so the process is terminated before
+    /// this returns (architecture §8.2).
+    pub fn stop(&mut self) -> Result<(), CompileError> {
+        if let Some(child) = self.child.take() {
+            child.kill().map_err(CompileError::Spawn)?;
         }
+        Ok(())
     }
 }
 

@@ -4,9 +4,9 @@
 //! They never expose generic filesystem/process access; all validation and
 //! session ownership lives in `OpenRequestRouter` and `SessionManager`.
 
-use log::warn;
 use serde::Serialize;
-use tauri::{Manager, State};
+use tauri::Manager;
+use tauri_plugin_dialog::DialogExt;
 
 use crate::app_state::AppState;
 use crate::compiler::{CompileError, CompileOutcome, CompilerError};
@@ -34,6 +34,8 @@ pub enum CommandError {
     #[error(transparent)]
     OpenRequest(#[from] OpenRequestError),
     #[error(transparent)]
+    Session(#[from] crate::session::SessionError),
+    #[error(transparent)]
     Compiler(#[from] CompileError),
     #[error(transparent)]
     Watch(#[from] CompilerError),
@@ -53,20 +55,6 @@ impl Serialize for CommandError {
     }
 }
 
-impl From<CompileError> for CommandError {
-    fn from(e: CompileError) -> Self {
-        // Surface the compiler diagnostic without leaking internals beyond the
-        // message; the frontend shows it as a controlled error.
-        CommandError::Compiler(e)
-    }
-}
-
-impl From<CompilerError> for CommandError {
-    fn from(e: CompilerError) -> Self {
-        CommandError::Watch(e)
-    }
-}
-
 fn parse_session_id(raw: &str) -> Result<SessionId, CommandError> {
     SessionId::new(raw.to_string()).map_err(|_| CommandError::InvalidSessionId(raw.to_string()))
 }
@@ -78,12 +66,21 @@ fn parse_session_id(raw: &str) -> Result<SessionId, CommandError> {
 pub fn open_document_dialog(
     app: tauri::AppHandle,
 ) -> Result<Option<OpenDocumentResult>, CommandError> {
-    let picked = tauri_plugin_dialog::blocking::FileDialogBuilder::new()
+    let picked = app
+        .dialog()
+        .file()
         .add_filter("Typst", &["typ"])
-        .pick_file();
-    let Some(path) = picked else {
+        .blocking_pick_file();
+    let Some(file_path) = picked else {
         return Ok(None);
     };
+    // `blocking_pick_file` returns a `FilePath`; for a file dialog the platform
+    // path variant is expected. Fall back to rejecting on parse failure rather
+    // than inventing a path.
+    let path = file_path
+        .as_path()
+        .ok_or(CommandError::OpenRequest(OpenRequestError::NotAFile))?
+        .to_path_buf();
     let normalized = OpenRequestRouter::validate(&path)?;
     let summary = register_session(app, normalized)?;
     Ok(Some(OpenDocumentResult { session: summary }))
@@ -147,12 +144,12 @@ pub fn get_active_session(app: tauri::AppHandle) -> Result<Option<SessionSummary
 /// including any bounded diagnostic. The frontend must not call this with a
 /// stale `session_id`; the backend verifies the id matches the active session.
 #[tauri::command]
-pub fn compile_document(
+pub async fn compile_document(
     session_id: String,
     app: tauri::AppHandle,
 ) -> Result<CompileOutcome, CommandError> {
     let id = parse_session_id(&session_id)?;
-    crate::compiler::CompilerService::compile_once(&app, &id).map_err(CommandError::from)
+    Ok(crate::compiler::sidecar::compile_once(&app, &id).await?)
 }
 
 /// Registers a validated entry path as a new active session.
@@ -193,7 +190,7 @@ fn register_session(
     // Start the live `typst watch` so source changes refresh the preview
     // (Stage 6). The watcher writes candidate.pdf; the candidate watcher turns
     // it into immutable revisions.
-    crate::compiler::start_watch(&app, &id).map_err(CommandError::from_compiler)?;
+    crate::compiler::start_watch(&app, &id)?;
     // Drop stale revisions from any previous session.
     if let Ok(mut reg) = state.revision_registry.lock() {
         reg.remove(&id);

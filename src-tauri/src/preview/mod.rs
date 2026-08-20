@@ -4,15 +4,15 @@ pub mod delivery;
 pub mod output_watch;
 pub mod revisions;
 
-pub use delivery::{get_preview_pdf, DeliveryError};
-pub use revisions::{PreviewRevision, RevisionError, RevisionRegistry, RevisionStore};
+pub use revisions::{PreviewRevision, RevisionError, RevisionRegistry};
 
-use tauri::Manager;
+use tauri::{Manager, Runtime};
 
 /// Verifies and commits a candidate snapshot as a new immutable revision for the
 /// active session. Shared by `output_watch` (watcher) and tests/commands.
-pub fn commit_candidate(
-    app: &tauri::AppHandle,
+#[allow(dead_code)]
+pub fn commit_candidate<R: Runtime>(
+    app: &tauri::AppHandle<R>,
     session_id: &crate::session::SessionId,
     candidate_path: &std::path::Path,
 ) -> Result<PreviewRevision, RevisionError> {

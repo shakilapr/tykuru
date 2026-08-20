@@ -91,7 +91,7 @@ mod tests {
         assert!(session
             .cache_dir
             .to_string_lossy()
-            .contains(&session.id.as_str()));
+            .contains(session.id.as_str()));
     }
 
     #[test]

@@ -22,7 +22,11 @@ pub struct PreviewRevision {
     pub path: PathBuf,
 }
 
+/// Errors produced by the revision pipeline. Several variants are reserved for
+/// paths reached by the candidate watcher / tests (architecture §12.1) and are
+/// not all produced by the current in-tree call sites.
 #[derive(Debug, Error)]
+#[allow(dead_code)]
 pub enum RevisionError {
     #[error("no active session for revision commit")]
     NoActiveSession,

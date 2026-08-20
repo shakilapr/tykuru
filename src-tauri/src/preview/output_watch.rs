@@ -48,14 +48,9 @@ pub fn start_candidate_watcher(
     let candidate_file = candidate_name.to_string();
     std::thread::spawn(move || {
         let mut pending = false;
-        loop {
-            match rx.recv() {
-                Ok(event) => {
-                    if event_is_relevant(&event, &candidate_file) {
-                        pending = true;
-                    }
-                }
-                Err(_) => break,
+        while let Ok(event) = rx.recv() {
+            if event_is_relevant(&event, &candidate_file) {
+                pending = true;
             }
             loop {
                 match rx.recv_timeout(DEBOUNCE) {
