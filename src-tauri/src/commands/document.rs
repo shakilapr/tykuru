@@ -4,11 +4,12 @@
 //! They never expose generic filesystem/process access; all validation and
 //! session ownership lives in `OpenRequestRouter` and `SessionManager`.
 
+use log::warn;
 use serde::Serialize;
 use tauri::{Manager, State};
 
 use crate::app_state::AppState;
-use crate::compiler::{CompileError, CompileOutcome};
+use crate::compiler::{CompileError, CompileOutcome, CompilerError};
 use crate::open_request::{OpenRequestError, OpenRequestRouter};
 use crate::session::{CloseError, SessionId};
 
@@ -34,6 +35,8 @@ pub enum CommandError {
     OpenRequest(#[from] OpenRequestError),
     #[error(transparent)]
     Compiler(#[from] CompileError),
+    #[error(transparent)]
+    Watch(#[from] CompilerError),
     #[error("no active session")]
     NoActiveSession,
     #[error("requested session is not the active session")]
@@ -55,6 +58,12 @@ impl From<CompileError> for CommandError {
         // Surface the compiler diagnostic without leaking internals beyond the
         // message; the frontend shows it as a controlled error.
         CommandError::Compiler(e)
+    }
+}
+
+impl From<CompilerError> for CommandError {
+    fn from(e: CompilerError) -> Self {
+        CommandError::Watch(e)
     }
 }
 
@@ -102,7 +111,11 @@ pub fn close_document(session_id: String, app: tauri::AppHandle) -> Result<(), C
         .map_err(|_| CommandError::LockPoisoned)?;
     match manager.close(&id) {
         Ok(()) => {
-            // Tear down the candidate watcher and revisions for the closed session.
+            // Tear down the compiler watcher, candidate watcher, and revisions
+            // for the closed session (architecture §8.2).
+            if let Err(e) = crate::compiler::stop_watch(&app) {
+                log::warn!("close: failed to stop compiler watcher: {e}");
+            }
             let state = app.state::<AppState>();
             if let Ok(mut guard) = state.candidate_watcher.lock() {
                 *guard = None;
@@ -177,6 +190,10 @@ fn register_session(
             .map_err(|_| CommandError::LockPoisoned)?;
         *guard = watcher.ok();
     }
+    // Start the live `typst watch` so source changes refresh the preview
+    // (Stage 6). The watcher writes candidate.pdf; the candidate watcher turns
+    // it into immutable revisions.
+    crate::compiler::start_watch(&app, &id).map_err(CommandError::from_compiler)?;
     // Drop stale revisions from any previous session.
     if let Ok(mut reg) = state.revision_registry.lock() {
         reg.remove(&id);

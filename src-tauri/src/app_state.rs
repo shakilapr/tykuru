@@ -6,9 +6,10 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use notify::RecommendedWatcher;
+use crate::compiler::CompilerManager;
 use crate::preview::RevisionRegistry;
 use crate::session::SessionManager;
+use notify::RecommendedWatcher;
 
 /// Top-level managed state for the backend.
 pub struct AppState {
@@ -16,6 +17,8 @@ pub struct AppState {
     pub session_manager: Mutex<SessionManager>,
     /// Per-session immutable preview revision ledger (see `architecture.md §12`).
     pub revision_registry: Mutex<RevisionRegistry>,
+    /// Live `typst watch` manager (one watcher for the active session).
+    pub compiler_manager: CompilerManager,
     /// Live candidate watcher for the active session (dropped on close/open).
     pub candidate_watcher: Mutex<Option<RecommendedWatcher>>,
     /// Tykuru cache root; all generated output is bounded under this path.
@@ -30,6 +33,7 @@ impl AppState {
         Self {
             session_manager: Mutex::new(SessionManager::new()),
             revision_registry: Mutex::new(RevisionRegistry::default()),
+            compiler_manager: CompilerManager::new(),
             candidate_watcher: Mutex::new(None),
             cache_root,
         }

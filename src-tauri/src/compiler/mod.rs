@@ -1,23 +1,26 @@
 //! Compiler subsystem: owns the bundled Typst sidecar lifecycle.
 
+pub mod manager;
 pub mod sidecar;
 
-pub use sidecar::{CompileError, CompileOutcome};
+pub use manager::{CompilerError, CompilerManager};
+pub use sidecar::{compile_once, CompileError, CompileOutcome, CompilerProcess};
 
 use tauri::AppHandle;
 
+use crate::app_state::AppState;
 use crate::session::SessionId;
 
-/// Thin coordinator over the Typst sidecar. Later stages (Stage 6) extend this
-/// with a `typst watch` process; the one-shot path lives in `sidecar.rs`.
-pub struct CompilerService;
+/// Spawns a live `typst watch` for the active session. Refuses a duplicate
+/// watcher (architecture §8.2). Replaces the one-shot compile in the open flow;
+/// `compile_once` remains available as a test helper / fallback.
+pub fn start_watch(app: &AppHandle, session_id: &SessionId) -> Result<(), CompilerError> {
+    let state = app.state::<AppState>();
+    state.compiler_manager.start(app, session_id)
+}
 
-impl CompilerService {
-    /// Runs a single `typst compile` for the active session matching `session_id`.
-    pub fn compile_once(
-        app: &AppHandle,
-        session_id: &SessionId,
-    ) -> Result<CompileOutcome, CompileError> {
-        sidecar::compile_once(app, session_id)
-    }
+/// Stops the running watcher and waits for the child to exit.
+pub fn stop_watch(app: &AppHandle) -> Result<(), CompilerError> {
+    let state = app.state::<AppState>();
+    state.compiler_manager.stop()
 }

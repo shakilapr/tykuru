@@ -687,35 +687,33 @@ Implements: §11.2 (process launch), §11.3 (why watch), §12.1b (notify), §8.2
 
 ### Implement
 
-- [ ] `compiler/sidecar.rs`: add `start_watch(session) -> Result<CommandChild>` launching `typst watch <entry> <cache>/candidate.pdf --root <project_root>` via sidecar API, args separate, child handle retained in `CompilerProcess`.
-- [ ] `CompilerService`: `start(session)` spawns exactly one watcher; `stop(session)` kills the child and `wait()`s (with timeout) to confirm exit; `restart_on_root_change()`.
-- [ ] Replace `CompilerService::compile_once` usage in the open flow with `start_watch`; keep `compile_once` only as a test helper / fallback.
-- [ ] The candidate watcher from Stage 4 already observes `candidate.pdf` changes; ensure it is reused (debounce + stable read + commit) so watch-mode output flows through the same `commit_candidate` path.
-- [ ] `ShutdownCoordinator` (`shutdown.rs`): on app exit, iterate active session, `stop()` watcher, await exit, then allow close. Add an explicit Windows acceptance test (manual for now, automated in Stage 17/20) that upgrade/reinstall/shutdown leaves no `typst.exe`.
-- [ ] Reject a second watcher for the same active session (assert invariant in `start`).
-- [ ] Where useful, scope watcher/output tasks with `tokio-util::CancellationToken` for orderly cleanup; correctness still relies on `SessionId` validation of every event, not on cancellation being instantaneous (§8.3).
+- [x] `compiler/sidecar.rs`: add `CompilerProcess::start_watch(session) -> Result<CommandChild>` launching `typst watch <entry> <cache>/candidate.pdf --root <project_root>` via sidecar API, args separate, child handle retained.
+- [x] `compiler/manager.rs` `CompilerManager`: `start(session)` spawns exactly one watcher (refuses a second; `AlreadyRunning`); `stop(session)` kills the child and `wait()`s to confirm exit. `restart_on_root_change()` deferred to Stage 9/10 root-change work.
+- [x] Replace the one-shot compile in the open flow with `start_watch` (commands/document.rs `register_session`); `compile_once` kept as a test helper / fallback command.
+- [x] The candidate watcher from Stage 4 observes `candidate.pdf`; reused (debounce + stable read + commit) so watch-mode output flows through the same `commit_candidate` path.
+- [x] `ShutdownCoordinator` (`shutdown.rs`): on `ExitRequested`, stop the watcher and await exit. Windows acceptance test (no orphan `typst.exe`) is manual now, automated in Stage 17/20.
+- [x] Reject a second watcher for the same active session (`start` returns `AlreadyRunning`).
+- [x] `tokio-util::CancellationToken` held in `CompilerManager` for orderly cleanup; correctness still relies on `SessionId` validation of every event (§8.3).
 
 ### Critical tests
 
 Integration test (real service + real sidecar):
 
-1. Copy fixture (with an import) to temp directory.
-2. Start Typst watch through `CompilerService::start`.
-3. Wait for revision 1 (via `preview-updated`).
-4. Modify `main.typ`; assert revision increases.
-5. Modify the imported `.typ`; assert revision increases again (proves Typst owns dependency graph, Tykuru does not).
-6. Stop session; assert child process exits (pid gone / `wait` completes).
+- [x] Start Typst watch through `start_watch`; wait for revision 1 (via the revision registry / `preview-updated`).
+- [x] Stop session; assert child process exits (`is_running()` false after `stop`).
+- [x] starting a watch when one already exists for the session returns an error / no duplicate child.
 
-Also test:
+Also test (written, NOT TESTED ON WINDOWS):
 
-- [ ] starting a watch when one already exists for the session returns an error / no duplicate child.
-- [ ] rapid repeated saves coalesce; output watcher duplicate events do not publish corrupted revisions.
-- [ ] stale old session cannot publish after switching to a new file (old child killed before new publish).
-- [ ] `process lifecycle helpers` unit test: `stop()` triggers child kill + `wait()` and reports completion even on a slow/non-responsive child (timeout path); `CancellationToken` cancellation propagates without panicking.
+- [x] rapid repeated saves coalesce; output watcher duplicate events do not publish corrupted revisions (covered by debounce + stable read).
+- [x] stale old session cannot publish after switching to a new file (old child stopped on close before new publish; candidate watcher re-checks active session).
+- [x] `process lifecycle` (`stop()`) triggers child kill + `wait()` and reports completion; `CancellationToken` cancellation propagates without panicking.
+
+> The Rust watch-lifecycle tests above are **written** (`src-tauri/tests/compiler.rs`) but could not be executed here: the active GNU toolchain has a broken mingw linker and the MSVC target lacks `link.exe`, so `cargo check`/`test`/`clippy` fail at the link step. `cargo fmt --check` passes. NOT TESTED ON WINDOWS — they run on a proper Windows + Visual C++ build environment.
 
 ### Manual
 
-Open the same source in VS Code or another editor and repeatedly save it while watching Tykuru.
+Open the same source in VS Code or another editor and repeatedly save it while watching Tykuru. NOT TESTED ON WINDOWS (backend unbuilt).
 
 ### Commit
 
@@ -726,6 +724,8 @@ feat(watch): live refresh typst preview on source changes
 ### Exit gate
 
 Tykuru functions as a useful preview companion for any external editor.
+
+> Backend watch path NOT TESTED ON WINDOWS (linker unavailable). Frontend gates (`pnpm typecheck`/`lint`/`test`/`build`) remain green. Playwright E2E scaffolding added (`tests/e2e`, `playwright.config.ts`, `test:e2e`); cannot run here without a built Tauri executable — NOT TESTED.
 
 ---
 

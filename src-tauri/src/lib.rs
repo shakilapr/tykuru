@@ -6,6 +6,7 @@ mod compiler;
 mod open_request;
 mod preview;
 mod session;
+mod shutdown;
 
 use app_state::AppState;
 
@@ -24,6 +25,14 @@ pub fn run() {
             commands::document::compile_document,
             commands::preview::get_preview_pdf_command,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Tykuru");
+        .build(tauri::generate_context!())
+        .expect("error while building Tykuru")
+        .run(|app, event| {
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                // Best-effort: stop the watcher so no `typst.exe` is orphaned.
+                if let Err(e) = crate::shutdown::shutdown(app) {
+                    log::warn!("shutdown: failed to stop compiler watcher: {e}");
+                }
+            }
+        });
 }
