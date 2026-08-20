@@ -1,0 +1,23 @@
+// Typed wrappers around Tauri `invoke` for document commands.
+// This is the ONLY place the frontend calls into document IPC (architecture §6.1).
+
+import { invoke } from "@tauri-apps/api/core";
+import type { OpenDocumentResult, SessionSummary } from "./types";
+
+export async function openDocumentDialog(): Promise<SessionSummary | null> {
+  const result = await invoke<OpenDocumentResult | null>("open_document_dialog");
+  return result ? result.session : null;
+}
+
+export async function openDocument(path: string): Promise<SessionSummary> {
+  const result = await invoke<OpenDocumentResult>("open_document", { path });
+  return result.session;
+}
+
+export async function closeDocument(sessionId: string): Promise<void> {
+  await invoke<void>("close_document", { sessionId });
+}
+
+export async function getActiveSession(): Promise<SessionSummary | null> {
+  return invoke<SessionSummary | null>("get_active_session");
+}

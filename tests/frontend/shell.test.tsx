@@ -9,7 +9,7 @@ const renderWithTheme = (ui: React.ReactNode) => render(<ThemeProvider>{ui}</The
 
 describe("StartScreen", () => {
   it("renders Open button with accessible name", () => {
-    render(<StartScreen onOpen={() => {}} />);
+    render(<StartScreen onOpen={() => {}} onOpenPath={() => {}} />);
     expect(screen.getByRole("button", { name: "Open .typ" })).toBeInTheDocument();
   });
 });

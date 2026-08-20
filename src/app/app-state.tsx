@@ -2,6 +2,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 
 export type ThemePreference = "system" | "light" | "dark";
 
+// Document UI state machine (architecture §7.5).
+export type DocumentUiState =
+  | { kind: "empty" }
+  | { kind: "opening"; name?: string }
+  | { kind: "open"; sessionId: string; filename: string }
+  | { kind: "error"; message: string };
+
 export interface AppState {
   theme: ThemePreference;
   setTheme: (theme: ThemePreference) => void;
@@ -10,6 +17,11 @@ export interface AppState {
   setEditorVisible: (visible: boolean) => void;
   splitRatio: number;
   setSplitRatio: (ratio: number) => void;
+  documentState: DocumentUiState;
+  openDocumentState: (sessionId: string, filename: string) => void;
+  openingDocumentState: (name?: string) => void;
+  errorDocumentState: (message: string) => void;
+  resetDocumentState: () => void;
 }
 
 const SPLIT_MIN = 0.2;
@@ -37,6 +49,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   });
   const [editorVisible, setEditorVisibleState] = useState(false);
   const [splitRatio, setSplitRatioState] = useState(0.5);
+  const [documentState, setDocumentState] = useState<DocumentUiState>({ kind: "empty" });
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, theme);
@@ -59,10 +72,42 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const toggleEditor = useCallback(() => setEditorVisibleState((v) => !v), []);
   const setEditorVisible = useCallback((v: boolean) => setEditorVisibleState(v), []);
   const setSplitRatio = useCallback((r: number) => setSplitRatioState(clampSplitRatio(r)), []);
+  const openDocumentState = useCallback((sessionId: string, filename: string) => {
+    setDocumentState({ kind: "open", sessionId, filename });
+  }, []);
+  const openingDocumentState = useCallback((name?: string) => setDocumentState({ kind: "opening", name }), []);
+  const errorDocumentState = useCallback((message: string) => setDocumentState({ kind: "error", message }), []);
+  const resetDocumentState = useCallback(() => setDocumentState({ kind: "empty" }), []);
 
   const value = useMemo<AppState>(
-    () => ({ theme, setTheme, editorVisible, toggleEditor, setEditorVisible, splitRatio, setSplitRatio }),
-    [theme, setTheme, editorVisible, toggleEditor, setEditorVisible, splitRatio, setSplitRatio],
+    () => ({
+      theme,
+      setTheme,
+      editorVisible,
+      toggleEditor,
+      setEditorVisible,
+      splitRatio,
+      setSplitRatio,
+      documentState,
+      openDocumentState,
+      openingDocumentState,
+      errorDocumentState,
+      resetDocumentState,
+    }),
+    [
+      theme,
+      setTheme,
+      editorVisible,
+      toggleEditor,
+      setEditorVisible,
+      splitRatio,
+      setSplitRatio,
+      documentState,
+      openDocumentState,
+      openingDocumentState,
+      errorDocumentState,
+      resetDocumentState,
+    ],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

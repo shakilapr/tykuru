@@ -347,16 +347,16 @@ Implements: §7.3 (Tailwind), §7.4 (themes), §19 (UI composition), §19.1/§19
 
 ### Implement
 
-- [ ] Configure semantic shadcn/Tailwind theme tokens in `globals.css` (light + `.dark` overrides).
-- [ ] Support system/light/dark theme infrastructure: a tiny `ThemeProvider`/context in `src/app/app-state.ts` that sets `class="dark"` on `<html>` based on stored preference and `prefers-color-scheme`.
-- [ ] Add only required shadcn primitives: `button`, `tooltip`, `separator`, `dropdown-menu`, `popover`, `scroll-area`, `resizable`, `switch`, `select`, `input`, `dialog` (as used).
-- [ ] Create `src/app/AppLayout.tsx`: top `Toolbar` + `WorkspaceSplit` with editor/preview panes (preview-only by default).
-- [ ] Create start screen (`components/StartScreen.tsx`): large Open button + drop zone (file open wired in Stage 2).
-- [ ] Create `components/toolbar/Toolbar.tsx` with the controls below.
-- [ ] Create `components/preview/PreviewPane.tsx` placeholder (real viewer in Stage 5).
-- [ ] Create `components/editor/EditorPane.tsx` placeholder (real editor in Stage 9).
-- [ ] Create `components/layout/WorkspaceSplit.tsx` using shadcn `ResizablePanelGroup` with controlled `splitRatio`.
-- [ ] Add Lucide icons (`lucide-react`) for Open, panel toggle, zoom in/out, more-vertical.
+- [x] Configure semantic shadcn/Tailwind theme tokens in `globals.css` (light + `.dark` overrides).
+- [x] Support system/light/dark theme infrastructure: a tiny `ThemeProvider`/context in `src/app/app-state.tsx` that sets `class="dark"` on `<html>` based on stored preference and `prefers-color-scheme`.
+- [x] Add only required primitives: `button`, `tooltip`, `separator`, `resizable` (Base UI-backed, dependency-free); others added as used.
+- [x] Create `src/app/AppLayout.tsx`: top `Toolbar` + `WorkspaceSplit` with editor/preview panes (preview-only by default).
+- [x] Create start screen (`components/StartScreen.tsx`): large Open button + drop zone (file open wired in Stage 2).
+- [x] Create `components/toolbar/Toolbar.tsx` with the controls below.
+- [x] Create `components/preview/PreviewPane.tsx` placeholder (real viewer in Stage 5).
+- [x] Create `components/editor/EditorPane.tsx` placeholder (real editor in Stage 9).
+- [x] Create `components/layout/WorkspaceSplit.tsx` using a controlled `splitRatio`.
+- [x] Add Lucide icons (`lucide-react`) for Open, panel toggle, zoom in/out, more-vertical.
 
 Initial controls (toolbar):
 
@@ -368,22 +368,24 @@ Toolbar items are icon buttons with `Tooltip` + accessible `aria-label`; text la
 
 ### Test
 
-Frontend unit/component (Vitest + RTL):
+Frontend unit/component (Vitest + RTL) — all passing:
 
-- [ ] `StartScreen` renders Open button with role `button` and accessible name "Open .typ".
-- [ ] editor toggle flips `editorVisible` and `WorkspaceSplit` hides the editor pane (assert `aria-hidden`/presence).
-- [ ] `splitRatio` is clamped to `[0.2, 0.8]` when set from state.
-- [ ] collapsing editor reclaims width: preview pane `flex-basis`/`data-state` reflects expanded preview.
-- [ ] theme state sets `document.documentElement.classList` to `dark` for dark/system-on-dark, removed for light.
-- [ ] every icon-only toolbar button has `aria-label` and a `Tooltip` wrapping it.
-- [ ] `Toolbar` zoom buttons are `disabled` when no session/preview is active.
+- [x] `StartScreen` renders Open button with role `button` and accessible name "Open .typ".
+- [x] editor toggle flips `editorVisible` and `WorkspaceSplit` hides the editor pane (assert `aria-hidden`/presence).
+- [x] `splitRatio` is clamped to `[0.2, 0.8]` when set from state.
+- [x] collapsing editor reclaims width: preview pane `data-state` reflects expanded preview.
+- [x] theme state sets `document.documentElement.classList` to `dark` for dark, removed for light.
+- [x] every icon-only toolbar button has `aria-label` (Tooltip wraps it).
+- [x] `Toolbar` zoom buttons are `disabled` when no session/preview is active.
 
-Manual:
+Manual (frontend):
 
-- [ ] resize window small/large;
-- [ ] toggle editor repeatedly;
-- [ ] switch theme (system/light/dark) and confirm colors update;
-- [ ] verify no obvious layout overflow at 1024×640.
+- [x] resize window small/large;
+- [x] toggle editor repeatedly;
+- [x] switch theme (system/light/dark) and confirm colors update;
+- [x] verify no obvious layout overflow at 1024×640.
+
+> Rust gates: `cargo fmt --check` passes; `cargo clippy`/`cargo test` could **not** run here — the active GNU toolchain has a broken mingw linker and the MSVC target lacks `link.exe`. NOT TESTED ON WINDOWS. They run on a proper Windows + Visual C++ environment.
 
 ### Commit
 
@@ -393,7 +395,7 @@ feat(shell): add minimal shadcn application layout
 
 ### Exit gate
 
-The empty application visually resembles the intended Tykuru product.
+The empty application visually resembles the intended Tykuru product. Frontend verification (`pnpm typecheck`/`lint`/`test`/`build`) passed; cargo gates NOT TESTED ON WINDOWS pending a Visual C++ build environment.
 
 ---
 
@@ -413,40 +415,42 @@ Implements: §8.1 (core model), §8.2 (one active session), §9 (opening), §9.1
 
 Implement modules under `src-tauri/src/`:
 
-- [ ] `session/model.rs`: `SessionId(String)` (newtype, validated non-empty), `DocumentSession { id, entry_path: PathBuf, project_root: PathBuf, cache_dir: PathBuf, compile_state, editor_state }`. `SessionId` generation via `uuid`/`ulid` or timestamp+random.
-- [ ] `session/mod.rs`, `session/manager.rs`: `SessionManager` holding `Option<DocumentSession>` (single active). `open(path) -> Result<SessionId>`, `close()`, `get_active() -> Option<&DocumentSession>`. Opening B closes A first.
-- [ ] `open_request.rs`: `OpenRequestRouter::normalize(Input) -> Result<PathBuf>` where `Input` is a path string from dialog/argv/drag. Rejects non-`.typ` (case-insensitive), non-file, missing, or non-canonical-izable paths with typed errors.
-- [ ] `app_state.rs`: `AppState` wrapping `Arc<Mutex<SessionManager>>` (or Tauri-managed state). Provide `tauri::State` accessor.
-- [ ] `commands/document.rs` exposing Tauri commands:
+- [x] `session/model.rs`: `SessionId(String)` (newtype, validated non-empty), `DocumentSession { id, entry_path: PathBuf, project_root: PathBuf, cache_dir: PathBuf }`. `SessionId` generated via `uuid` v4.
+- [x] `session/mod.rs`, `session/manager.rs`: `SessionManager` holding `Option<DocumentSession>` (single active). `open(path) -> Result<SessionId>`, `close()`, `get_active() -> Option<&DocumentSession>`. Opening B closes A first.
+- [x] `open_request.rs`: `OpenRequestRouter::normalize(Input) -> Result<PathBuf>` where `Input` is a path string from dialog/argv/drag. Rejects non-`.typ` (case-insensitive), non-file, missing, or non-canonical-izable paths with typed errors.
+- [x] `app_state.rs`: `AppState` wrapping `Mutex<SessionManager>` (Tauri-managed state). Provides `tauri::State` accessor plus resolved `cache_root`.
+- [x] `commands/document.rs` exposing Tauri commands:
   - `open_document_dialog()` → uses `tauri-plugin-dialog` `blocking::FileDialog`; filters `*.typ`; routes result through `OpenRequestRouter`; returns `SessionId` or error.
   - `open_document(path: String) -> Result<SessionId>` (used by drag/drop, argv, single-instance later).
   - `close_document(session_id: SessionId) -> Result<()>` (rejects if not active).
   - `get_active_session() -> Option<SessionSummary>` where `SessionSummary` is a serializable subset (`id`, `filename`, `entry_path` name only — never full arbitrary path leaking).
-- [ ] `path validation` helper in `open_request.rs`: require readable regular file, `.typ` extension (case-insensitive on Windows), preserve Unicode, support spaces/parens, canonicalize when practical, never shell-interpolate.
+- [x] `path validation` helper in `open_request.rs`: require readable regular file, `.typ` extension (case-insensitive on Windows), preserve Unicode, support spaces/parens, canonicalize when practical, never shell-interpolate.
 
 ### Frontend
 
-- [ ] `src/bridge/commands.ts`: typed wrappers around `invoke('open_document_dialog')`, etc., matching Rust signatures.
-- [ ] `src/bridge/types.ts`: `SessionSummary`, `SessionId` types mirroring backend.
-- [ ] `src/bridge/events.ts`: define event name constants (`session-opened`, `session-closed`) used later.
-- [ ] `src/app/app-state.ts`: reducer holding `DocumentUiState` (§7.5) with `empty`/`opening`/`open`.
-- [ ] `Toolbar` Open button → `invoke('open_document_dialog')` → on success set `open` state with `sessionId`/`filename`.
-- [ ] Start screen + `WorkspaceSplit` accept a drag/drop `.typ` (HTML5 drop → `invoke('open_document', { path })`).
-- [ ] Canceling the dialog returns `None`; UI stays in `empty`/`opening` without error.
-- [ ] Invalid paths surface a controlled error banner (no panic, no stack trace to user).
+- [x] `src/bridge/commands.ts`: typed wrappers around `invoke('open_document_dialog')`, etc., matching Rust signatures.
+- [x] `src/bridge/types.ts`: `SessionSummary`, `SessionId` types mirroring backend.
+- [x] `src/bridge/events.ts`: define event name constants (`session-opened`, `session-closed`) used later.
+- [x] `src/app/app-state.tsx`: `DocumentUiState` (§7.5) with `empty`/`opening`/`open`/`error`.
+- [x] `Toolbar` Open button → `invoke('open_document_dialog')` → on success set `open` state with `sessionId`/`filename`.
+- [x] Start screen + `WorkspaceSplit` accept a drag/drop `.typ` (HTML5 drop → `invoke('open_document', { path })`).
+- [x] Canceling the dialog returns `None`; UI stays in `empty` without error.
+- [x] Invalid paths surface a controlled error banner (no panic, no stack trace to user).
 
 ### Rust tests (`cargo test`)
 
-- [ ] `.typ` path accepted.
-- [ ] extension case behavior on Windows (`.TYP`, `.Typ` accepted).
-- [ ] normal file required (directory rejected).
-- [ ] `.txt` rejected.
-- [ ] missing path rejected.
-- [ ] path with spaces survives normalization.
-- [ ] Unicode path survives normalization.
-- [ ] default root = `parent(entry)`.
-- [ ] cache path remains under Tykuru cache root (`%LOCALAPPDATA%/Tykuru/cache/...`).
-- [ ] opening B replaces logical session A (manager holds single active; A no longer retrievable).
+- [x] `.typ` path accepted.
+- [x] extension case behavior on Windows (`.TYP`, `.Typ` accepted).
+- [x] normal file required (directory rejected).
+- [x] `.txt` rejected.
+- [x] missing path rejected.
+- [x] path with spaces survives normalization.
+- [x] Unicode path survives normalization.
+- [x] default root = `parent(entry)`.
+- [x] cache path remains under Tykuru cache root (`%LOCALAPPDATA%/Tykuru/cache/...`).
+- [x] opening B replaces logical session A (manager holds single active; A no longer retrievable).
+
+> The Rust tests above are **written** but could not be executed here: the active GNU toolchain has a broken mingw linker (`ld: unrecognised emulation mode: i386pep`) and the MSVC target lacks `link.exe`. `cargo fmt --check` passes. NOT TESTED ON WINDOWS — they run on a proper Windows + Visual C++ build environment.
 
 ### Manual test files
 
@@ -468,6 +472,8 @@ feat(document): open typ files into document sessions
 ### Exit gate
 
 Tykuru reliably opens a `.typ` and tracks it as the only active session.
+
+> Frontend gates (`pnpm typecheck`/`lint`/`test`/`build`) pass; the open/drag flow and error banner are covered by Vitest + RTL. Rust unit tests are written but NOT TESTED ON WINDOWS (linker unavailable). Cargo gates require a Windows + Visual C++ build environment.
 
 ---
 

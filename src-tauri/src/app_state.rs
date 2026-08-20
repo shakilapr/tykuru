@@ -1,12 +1,35 @@
 //! Managed application state.
 //!
-//! Stage 0 owns a minimal placeholder. Session/document state is added in
-//! later stages (see `architecture.md §8` and `work-plan.md`).
+//! Holds the single `SessionManager` behind a `Mutex` and the cache root derived
+//! once at startup. Tauri commands read this via `tauri::State`.
 
+use std::path::PathBuf;
 use std::sync::Mutex;
 
+use crate::session::SessionManager;
+
 /// Top-level managed state for the backend.
-#[derive(Default)]
 pub struct AppState {
-    pub started: Mutex<bool>,
+    /// Single active document session (see `architecture.md §8.2`).
+    pub session_manager: Mutex<SessionManager>,
+    /// Tykuru cache root; all generated output is bounded under this path.
+    pub cache_root: PathBuf,
+}
+
+impl AppState {
+    /// Builds the managed state, resolving the Tykuru cache root.
+    pub fn new() -> Self {
+        let cache_root = crate::open_request::tykuru_cache_root()
+            .unwrap_or_else(|| PathBuf::from(".tykuru-cache"));
+        Self {
+            session_manager: Mutex::new(SessionManager::new()),
+            cache_root,
+        }
+    }
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
