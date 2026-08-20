@@ -246,28 +246,46 @@ chore(release): complete v1 hardening
 
 Create a reproducible Tauri + React project with the approved frontend stack and quality gates.
 
-### Implement
+### Architecture refs
 
-- [ ] Create repository `tykuru`.
-- [ ] Add `AGENTS.md`.
-- [ ] Add `architecture.md`.
-- [ ] Add `work-plan.md`.
-- [ ] Add `README.md` with setup/run/test basics.
-- [ ] Choose and add `LICENSE`.
-- [ ] Scaffold Tauri 2 + React + TypeScript + Vite.
-- [ ] Configure pnpm; commit exactly one package lockfile.
-- [ ] Enable strict TypeScript.
-- [ ] Install/configure Tailwind CSS.
-- [ ] Initialize shadcn/ui with Base UI primitive base (shadcn default).
-- [ ] Configure Lucide React.
-- [ ] Add Vitest.
-- [ ] Add React Testing Library if component tests need it.
-- [ ] Configure Rust format/clippy baseline.
-- [ ] Add `.editorconfig`.
-- [ ] Add `.gitignore`.
-- [ ] Create `config/versions.toml`.
-- [ ] Add initial `scripts/verify.ps1` or cross-platform package scripts.
-- [ ] Add CI skeleton.
+Implements: §1, §4 (stack), §6 (repo layout + structure principles + coding standards), §19, §27 (git), §28 (CI).
+
+### Backend scaffold
+
+- [ ] `src-tauri/Cargo.toml` with `tauri` (v2), `tauri-build`, `serde`, `serde_json`, `thiserror`, `log`, `tauri-plugin-log`, `tauri-plugin-dialog`, `tauri-plugin-single-instance` (added later), `notify` (added later).
+- [ ] `src-tauri/tauri.conf.json` with product name `Tykuru`, identifier `com.tykuru.app`, `frontendDist`/`devUrl` pointing at Vite, empty `bundle.fileAssociations` for now.
+- [ ] `src-tauri/build.rs` invoking `tauri_build::build()`.
+- [ ] `src-tauri/src/main.rs` → `tykuru_lib::run()`.
+- [ ] `src-tauri/src/lib.rs` exposing `run()` that builds the Tauri app, registers plugins, and invokes `AppState` setup.
+- [ ] `src-tauri/capabilities/default.json` with minimal permissions (`core:default`, dialog, log). No filesystem/process/shell permissions.
+- [ ] `src-tauri/binaries/.gitkeep` (sidecar added in Stage 3).
+- [ ] `src-tauri/icons/` placeholder set.
+- [ ] `tests/frontend/`, `tests/integration/`, `tests/e2e/` directories (with a placeholder test so the gates have something to run).
+- [ ] Establish the structure principles from `architecture.md §6.1` and coding standards from `architecture.md §6.2` as the baseline the remaining stages follow.
+
+### Frontend scaffold
+
+- [ ] `package.json` with pinned deps: `react`, `react-dom`, `vite`, `@vitejs/plugin-react`, `typescript`, `tailwindcss`, `@tailwindcss/vite` (or PostCSS), `shadcn` (Base UI base), `lucide-react`, `pdfjs-dist` (pinned; wired in Stage 5), `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `@testing-library/user-event`.
+- [ ] `tsconfig.json` strict mode, `noUncheckedIndexedAccess`, path alias `@/*` → `src/*`.
+- [ ] `vite.config.ts` with React plugin, Vitest test config (`environment: 'jsdom'`), path alias.
+- [ ] `components.json` (shadcn, style neutral, Base UI base, alias `@/components`, `@/lib`).
+- [ ] `src/styles/globals.css` with Tailwind layers + theme CSS variables (light/dark) consumed by shadcn tokens (`--background`, `--foreground`, `--border`, `--muted-foreground`, `--destructive`, etc.).
+- [ ] `src/lib/utils.ts` with `cn()` helper.
+- [ ] `src/main.tsx`, `src/app/App.tsx` (placeholder shell), `src/app/AppLayout.tsx`.
+- [ ] `src/components/ui/` populated by shadcn for `button`, `tooltip`, `separator`, `dialog`, `dropdown-menu`, `popover`, `scroll-area`, `switch`, `select`, `input`, `resizable` (as needed in later stages).
+
+### Scripts and config
+
+- [ ] `config/versions.toml` with `[typst]` version + expected checksum fields (empty until Stage 3).
+- [ ] `scripts/verify_typst.ps1` (stub: validates sidecar presence/checksum, exits non-zero with clear message when not yet present — must not falsely pass).
+- [ ] `scripts/fetch_typst.ps1` (stub for Stage 3).
+- [ ] `scripts/verify.ps1` and `scripts/build_windows.ps1` (stubs that delegate to package scripts and fail loudly if the underlying stage is unimplemented).
+- [ ] `package.json` scripts: `dev`, `typecheck`, `lint`, `test`, `verify`, `build`, `tauri`, `typst:fixtures` (stub), `test:e2e` (stub), `build:windows` (stub). Stubs must print "not implemented" and exit non-zero rather than report success.
+- [ ] `.editorconfig` (LF/CRLF, 4-space Rust, 2-space TS).
+- [ ] `.gitignore` covering `node_modules/`, `dist/`, `src-tauri/target/`, Tykuru cache, generated PDFs.
+- [ ] `.github/workflows/verify.yml` skeleton (checkout, pnpm install, typecheck, lint, test, build, cargo fmt/clippy/test); Windows E2E job added in Stage 17/18.
+- [ ] `README.md` with prerequisites, `pnpm install`, `pnpm tauri dev`, `pnpm verify`, and the contribution/test commands.
+- [ ] `LICENSE` (MIT or chosen).
 
 ### Expected scripts
 
@@ -321,49 +339,49 @@ A clean clone can install dependencies, run verification, and launch the baselin
 
 Establish the minimal Tykuru visual language before adding document functionality.
 
+### Architecture refs
+
+Implements: §7.3 (Tailwind), §7.4 (themes), §19 (UI composition), §19.1/§19.2/§19.3.
+
 ### Implement
 
-- [ ] Configure semantic shadcn/Tailwind theme tokens.
-- [ ] Support system/light/dark theme infrastructure.
-- [ ] Add only required shadcn primitives.
-- [ ] Create `AppLayout`.
-- [ ] Create start screen.
-- [ ] Create toolbar.
-- [ ] Create preview placeholder.
-- [ ] Create collapsible editor placeholder.
-- [ ] Create resizable split layout.
-- [ ] Add Lucide icons.
+- [ ] Configure semantic shadcn/Tailwind theme tokens in `globals.css` (light + `.dark` overrides).
+- [ ] Support system/light/dark theme infrastructure: a tiny `ThemeProvider`/context in `src/app/app-state.ts` that sets `class="dark"` on `<html>` based on stored preference and `prefers-color-scheme`.
+- [ ] Add only required shadcn primitives: `button`, `tooltip`, `separator`, `dropdown-menu`, `popover`, `scroll-area`, `resizable`, `switch`, `select`, `input`, `dialog` (as used).
+- [ ] Create `src/app/AppLayout.tsx`: top `Toolbar` + `WorkspaceSplit` with editor/preview panes (preview-only by default).
+- [ ] Create start screen (`components/StartScreen.tsx`): large Open button + drop zone (file open wired in Stage 2).
+- [ ] Create `components/toolbar/Toolbar.tsx` with the controls below.
+- [ ] Create `components/preview/PreviewPane.tsx` placeholder (real viewer in Stage 5).
+- [ ] Create `components/editor/EditorPane.tsx` placeholder (real editor in Stage 9).
+- [ ] Create `components/layout/WorkspaceSplit.tsx` using shadcn `ResizablePanelGroup` with controlled `splitRatio`.
+- [ ] Add Lucide icons (`lucide-react`) for Open, panel toggle, zoom in/out, more-vertical.
 
-Initial controls:
+Initial controls (toolbar):
 
 ```text
-Open .typ
-Toggle editor
-Filename
-Compile status
-Zoom -
-Zoom indicator
-Zoom +
-Overflow menu
+Open .typ      Toggle editor      Filename      Compile status      Zoom -   Zoom indicator   Zoom +   Overflow menu
 ```
+
+Toolbar items are icon buttons with `Tooltip` + accessible `aria-label`; text labels only where space permits. Zoom controls are disabled until a preview exists.
 
 ### Test
 
-Frontend unit/component:
+Frontend unit/component (Vitest + RTL):
 
-- [ ] start screen renders Open button;
-- [ ] editor toggle changes pane visibility;
-- [ ] split ratio is bounded;
-- [ ] preview receives reclaimed width when editor closes;
-- [ ] system/light/dark state selects correct theme class/token state;
-- [ ] all icon-only buttons have accessible labels/tooltips.
+- [ ] `StartScreen` renders Open button with role `button` and accessible name "Open .typ".
+- [ ] editor toggle flips `editorVisible` and `WorkspaceSplit` hides the editor pane (assert `aria-hidden`/presence).
+- [ ] `splitRatio` is clamped to `[0.2, 0.8]` when set from state.
+- [ ] collapsing editor reclaims width: preview pane `flex-basis`/`data-state` reflects expanded preview.
+- [ ] theme state sets `document.documentElement.classList` to `dark` for dark/system-on-dark, removed for light.
+- [ ] every icon-only toolbar button has `aria-label` and a `Tooltip` wrapping it.
+- [ ] `Toolbar` zoom buttons are `disabled` when no session/preview is active.
 
 Manual:
 
 - [ ] resize window small/large;
 - [ ] toggle editor repeatedly;
-- [ ] switch theme;
-- [ ] verify no obvious layout overflow.
+- [ ] switch theme (system/light/dark) and confirm colors update;
+- [ ] verify no obvious layout overflow at 1024×640.
 
 ### Commit
 
@@ -385,56 +403,48 @@ The empty application visually resembles the intended Tykuru product.
 
 Safely open and represent a Typst source file before compilation exists.
 
+### Architecture refs
+
+Implements: §8.1 (core model), §8.2 (one active session), §9 (opening), §9.1 (path validation), §20 (command boundary), §3.5 (backend owns).
+
 ### Backend
 
-Implement narrow commands/services for:
+Implement modules under `src-tauri/src/`:
 
-```text
-open_document_dialog
-open_document
-close_document
-get_active_session
-```
-
-Create:
-
-```text
-SessionId
-DocumentSession
-OpenRequestRouter
-```
-
-Initial session fields:
-
-```text
-session id
-entry path
-project root
-cache path
-```
+- [ ] `session/model.rs`: `SessionId(String)` (newtype, validated non-empty), `DocumentSession { id, entry_path: PathBuf, project_root: PathBuf, cache_dir: PathBuf, compile_state, editor_state }`. `SessionId` generation via `uuid`/`ulid` or timestamp+random.
+- [ ] `session/mod.rs`, `session/manager.rs`: `SessionManager` holding `Option<DocumentSession>` (single active). `open(path) -> Result<SessionId>`, `close()`, `get_active() -> Option<&DocumentSession>`. Opening B closes A first.
+- [ ] `open_request.rs`: `OpenRequestRouter::normalize(Input) -> Result<PathBuf>` where `Input` is a path string from dialog/argv/drag. Rejects non-`.typ` (case-insensitive), non-file, missing, or non-canonical-izable paths with typed errors.
+- [ ] `app_state.rs`: `AppState` wrapping `Arc<Mutex<SessionManager>>` (or Tauri-managed state). Provide `tauri::State` accessor.
+- [ ] `commands/document.rs` exposing Tauri commands:
+  - `open_document_dialog()` → uses `tauri-plugin-dialog` `blocking::FileDialog`; filters `*.typ`; routes result through `OpenRequestRouter`; returns `SessionId` or error.
+  - `open_document(path: String) -> Result<SessionId>` (used by drag/drop, argv, single-instance later).
+  - `close_document(session_id: SessionId) -> Result<()>` (rejects if not active).
+  - `get_active_session() -> Option<SessionSummary>` where `SessionSummary` is a serializable subset (`id`, `filename`, `entry_path` name only — never full arbitrary path leaking).
+- [ ] `path validation` helper in `open_request.rs`: require readable regular file, `.typ` extension (case-insensitive on Windows), preserve Unicode, support spaces/parens, canonicalize when practical, never shell-interpolate.
 
 ### Frontend
 
-- [ ] Open button calls native dialog filtered to `.typ`.
-- [ ] Drag/drop `.typ` opens it.
-- [ ] Filename appears in toolbar.
-- [ ] Canceling dialog is harmless.
-- [ ] Invalid paths show controlled error.
+- [ ] `src/bridge/commands.ts`: typed wrappers around `invoke('open_document_dialog')`, etc., matching Rust signatures.
+- [ ] `src/bridge/types.ts`: `SessionSummary`, `SessionId` types mirroring backend.
+- [ ] `src/bridge/events.ts`: define event name constants (`session-opened`, `session-closed`) used later.
+- [ ] `src/app/app-state.ts`: reducer holding `DocumentUiState` (§7.5) with `empty`/`opening`/`open`.
+- [ ] `Toolbar` Open button → `invoke('open_document_dialog')` → on success set `open` state with `sessionId`/`filename`.
+- [ ] Start screen + `WorkspaceSplit` accept a drag/drop `.typ` (HTML5 drop → `invoke('open_document', { path })`).
+- [ ] Canceling the dialog returns `None`; UI stays in `empty`/`opening` without error.
+- [ ] Invalid paths surface a controlled error banner (no panic, no stack trace to user).
 
-### Rust tests
+### Rust tests (`cargo test`)
 
-Test:
-
-- [ ] `.typ` path accepted;
-- [ ] extension case behavior on Windows;
-- [ ] normal file required;
-- [ ] `.txt` rejected;
-- [ ] missing path rejected;
-- [ ] paths with spaces survive;
-- [ ] Unicode survives;
-- [ ] default root = parent;
-- [ ] cache path remains under Tykuru cache root;
-- [ ] opening B replaces logical session A.
+- [ ] `.typ` path accepted.
+- [ ] extension case behavior on Windows (`.TYP`, `.Typ` accepted).
+- [ ] normal file required (directory rejected).
+- [ ] `.txt` rejected.
+- [ ] missing path rejected.
+- [ ] path with spaces survives normalization.
+- [ ] Unicode path survives normalization.
+- [ ] default root = `parent(entry)`.
+- [ ] cache path remains under Tykuru cache root (`%LOCALAPPDATA%/Tykuru/cache/...`).
+- [ ] opening B replaces logical session A (manager holds single active; A no longer retrievable).
 
 ### Manual test files
 
@@ -465,58 +475,66 @@ Tykuru reliably opens a `.typ` and tracks it as the only active session.
 
 Prove the packaged app can compile Typst without requiring a global installation.
 
+### Architecture refs
+
+Implements: §3.1 (Typst authority), §11.1 (bundling), §11.2 (process launch), §26 (version policy), §17 (cache).
+
 ### Implement
 
-- [ ] Pin Typst version in `config/versions.toml`.
-- [ ] Add controlled Windows sidecar fetch script.
-- [ ] Verify expected source/checksum in fetch/release process.
-- [ ] Rename/place sidecar according to Tauri external-binary requirements.
-- [ ] Configure Tauri permissions narrowly.
-- [ ] Implement `CompilerService`.
-- [ ] Start with `typst compile` one-shot mode.
-- [ ] Compile into session cache.
-- [ ] Capture stderr/stdout/exit status.
+- [ ] Pin Typst version in `config/versions.toml` (`version`, `target` triple, `checksum_sha256`).
+- [ ] `scripts/fetch_typst.ps1`: download official Typst release binary for `x86_64-pc-windows-msvc` into `src-tauri/binaries/typst-x86_64-pc-windows-msvc.exe`, verify SHA-256 against `versions.toml`, fail loudly on mismatch.
+- [ ] `scripts/verify_typst.ps1`: assert the sidecar exists and checksum matches; exit non-zero otherwise.
+- [ ] Tauri sidecar config in `tauri.conf.json` (`bundle.externalBin` includes the sidecar glob) so Tauri resolves `typst` at runtime.
+- [ ] `compiler/mod.rs`, `compiler/sidecar.rs`: `CompilerProcess` that builds the command via `tauri::api::process::Command::new_sidecar("typst")` (no shell). Arguments passed separately: `compile <entry> <candidate.pdf> --root <project_root>`.
+- [ ] Retain `tauri::process::CommandChild` handle inside `CompilerProcess`; expose `kill()`/`wait()`.
+- [ ] `compiler/mod.rs` `CompilerService` with `compile_once(session) -> Result<CompileOutcome>` where `CompileOutcome { success: bool, exit_status, stderr: String, candidate_path: PathBuf }`.
+- [ ] Candidate output path: `<cache_dir>/candidate.pdf`. Never write into the project directory.
+- [ ] Capture stderr/stdout via piped child; bound stderr buffer (e.g. last 64 KiB) to avoid unbounded memory.
+- [ ] Narrow Tauri permissions: no `shell`/`process` access from frontend; only backend uses sidecar API.
 
 Pipeline:
 
 ```text
 main.typ
    ↓
-CompilerService
+CompilerService::compile_once
    ↓
-bundled typst compile
+bundled typst compile (sidecar, args separate)
    ↓
 candidate.pdf in cache
 ```
 
 ### Fixtures
 
-Create:
+Create under `fixtures/` (committed, real Typst sources):
 
-```text
-fixtures/basic/
-fixtures/imports/
-fixtures/images/
-fixtures/bibliography/
-fixtures/unicode/
-fixtures/errors/
-```
+- [ ] `fixtures/basic/main.typ` — headings, equations, a table.
+- [ ] `fixtures/imports/main.typ` + `fixtures/imports/part.typ` (import/include).
+- [ ] `fixtures/images/main.typ` + a small committed PNG/JPEG/SVG.
+- [ ] `fixtures/bibliography/main.typ` + `refs.bib`.
+- [ ] `fixtures/unicode/main.typ` — non-ASCII content.
+- [ ] `fixtures/errors/main.typ` — intentionally invalid Typst.
+- [ ] `fixtures/fonts/` — uses a system font only (no bundled font dependency).
 
-### Integration tests
+### Integration tests (`cargo test`, real sidecar)
 
-Valid fixture:
+Valid fixture (`fixtures/basic`):
 
-- [ ] Typst process exits success;
-- [ ] candidate exists;
-- [ ] candidate starts `%PDF-`;
-- [ ] candidate has non-trivial size;
-- [ ] project directory does not receive generated preview PDF.
+- [ ] Typst process exits success.
+- [ ] candidate exists at cache path.
+- [ ] candidate starts with `%PDF-`.
+- [ ] candidate size is non-trivial (> 1 KiB).
+- [ ] project directory receives no generated preview PDF (assert no `.pdf` written under `fixtures/basic`).
 
-Invalid fixture:
+Invalid fixture (`fixtures/errors`):
 
-- [ ] process returns failure;
-- [ ] diagnostic captured;
-- [ ] Tykuru backend does not panic.
+- [ ] process returns failure.
+- [ ] bounded diagnostic captured in `stderr`.
+- [ ] Tykuru backend does not panic; returns structured `Err`.
+
+Also:
+
+- [ ] sidecar checksum verified by `scripts/verify_typst.ps1` in CI before compile tests run.
 
 ### Manual
 
@@ -540,32 +558,41 @@ Tykuru can compile representative Typst files with only its bundled compiler.
 
 Create the safe boundary between Typst output and PDF.js.
 
+### Architecture refs
+
+Implements: §12 (preview publication), §12.1 (candidate verification), §12.1b (notify), §12.2 (revision ordering), §12.3 (last-good), §13 (delivery), §17 (cache).
+
 ### Implement
 
-- [ ] Add `PreviewRevision` type.
-- [ ] Validate candidate readability via bounded stable full read (read, re-stat, confirm unchanged).
-- [ ] Validate non-zero length.
-- [ ] Validate `%PDF-` signature and basic PDF sanity.
-- [ ] Write a NEW uniquely named immutable revision file fully, then close it.
-- [ ] Mark the new revision current.
-- [ ] Increment revision monotonically.
-- [ ] Store current revision in active session.
-- [ ] Retain small bounded revision set (candidate + current + previous is enough).
-- [ ] Safely delete old revisions.
-- [ ] Add binary IPC `get_preview_pdf(session_id, revision)` returning `tauri::ipc::Response` bytes.
-- [ ] Treat `notify` events as hints; parent-directory watchers; local debounce/re-stat state machine.
+- [ ] `preview/mod.rs`, `preview/revisions.rs`:
+  - `PreviewRevision { session_id: SessionId, number: u64, path: PathBuf }`.
+  - `RevisionStore` per session: `current: Option<u64>`, `published: Vec<PreviewRevision>` (bounded, e.g. keep last 3).
+  - `commit_candidate(session, candidate_path) -> Result<PreviewRevision>`:
+    1. verify `session_id` is active;
+    2. bounded stable full read (read bytes fully, `re-stat`, require size unchanged within a short window; retry a few times);
+    3. require non-zero length;
+    4. require leading `%PDF-` and trailing `%%EOF` presence as basic sanity;
+    5. write NEW `<cache>/revision-{:06}.pdf` fully, flush, close;
+    6. update `current` to the new number (monotonic increment);
+    7. garbage-collect all but newest N revisions (root-bounded delete).
+- [ ] `preview/delivery.rs`: Tauri command `get_preview_pdf(session_id: SessionId, revision: u64) -> Result<tauri::ipc::Response>`:
+  - reject unknown session, reject revision != current (or not in published set);
+  - resolve internally known path (no frontend path input);
+  - read file bytes, return `tauri::ipc::Response::new(bytes)` (ArrayBuffer).
+- [ ] `preview/output_watch.rs`: `notify` `RecommendedWatcher` on the session cache directory (parent of `candidate.pdf`), non-recursive. On any event, debounce ~50–150 ms, then call `commit_candidate` if the active session matches. This stage wires only the candidate watcher; source watching added in Stage 6/10.
+- [ ] `commands/preview.rs`: expose `get_preview_pdf`. Emit `preview-updated(session_id, revision)` event after each successful commit (frontend consumes in Stage 5).
 
-### Backend tests
+### Backend tests (`cargo test`)
 
-- [ ] valid candidate commits;
-- [ ] empty file rejected;
-- [ ] non-PDF rejected;
-- [ ] still-being-written candidate does not publish a partial revision;
-- [ ] revisions increase monotonically;
-- [ ] stale `SessionId` cannot publish;
-- [ ] unknown session/revision cannot be served;
-- [ ] traversal-like requests rejected;
-- [ ] cleanup cannot escape cache root.
+- [ ] valid candidate commits to an immutable revision file.
+- [ ] empty file rejected.
+- [ ] non-PDF (no `%PDF-`) rejected.
+- [ ] a candidate that is replaced mid-read (simulate by swapping file between read and re-stat) does not publish a partial/half-written revision.
+- [ ] revisions increase monotonically per session.
+- [ ] stale `SessionId` cannot publish.
+- [ ] `get_preview_pdf` rejects unknown session and unknown/outdated revision.
+- [ ] traversal-like requests rejected (no path input accepted; assert resolution never escapes cache root).
+- [ ] cleanup deletes only files under the session cache root; a sibling path is refused.
 
 ### Commit
 
@@ -585,26 +612,25 @@ Backend can safely publish an immutable PDF revision addressed by session/revisi
 
 Display a committed Typst PDF inside Tykuru.
 
+### Architecture refs
+
+Implements: §12.3 (last-good), §13 (delivery), §14 (PDF.js viewer), §14.1 (view-state).
+
 ### Implement
 
-- [ ] Add pinned `pdfjs-dist`.
-- [ ] Configure PDF.js worker for Vite/Tauri.
-- [ ] Create `PdfViewer` React component.
-- [ ] Load committed revision via `get_preview_pdf` binary IPC into `getDocument({ data })`; no custom preview URL.
-- [ ] Add page-width scale.
-- [ ] Add continuous vertical pages.
-- [ ] Add zoom controls.
-- [ ] Preserve selectable text.
-- [ ] Support internal links.
-- [ ] Handle external links deliberately.
-- [ ] Implement find/search or reserve a minimal known follow-up inside this stage.
+- [ ] Add pinned `pdfjs-dist` to `package.json`; import `pdfjsLib` and set `GlobalWorkerOptions.workerSrc` (Vite `?url` or `pdf.worker.min.mjs` asset) so the worker runs under Tauri.
+- [ ] `src/preview/PdfViewer.tsx`: wraps PDF.js; holds a `PDFDocumentProxy`; renders pages to canvas + text layer. Use PDF.js viewer/display components rather than reimplementing primitives.
+- [ ] `src/preview/preview-controller.ts`: listens for `preview-updated(session_id, revision)`; on event, calls `invoke('get_preview_pdf', { sessionId, revision })`, converts `ArrayBuffer` → `Uint8Array`, calls `pdfjsLib.getDocument({ data })`. Rejects stale `session_id` and older `revision` (compare against currently displayed).
+- [ ] `src/preview/view-state.ts`: tracks `{ scaleMode, scaleValue, visiblePage, relativeOffset }`.
+- [ ] `src/preview/revision-guard.ts`: pure helpers `isNewerRevision(current, incoming)` and `isSameSession(active, event)` used by the controller (unit-tested).
+- [ ] `PdfViewer` adds page-width default scale, continuous vertical pages, zoom in/out/reset buttons wired to toolbar (`Zoom -/+` and indicator). Preserve selectable text layer. Support internal links. External links open via a deliberate backend `open_url`/`shell` path gated by user action (stub safe handler now: log + no-op or confirm).
+- [ ] Find/search: implement minimal text-search highlight if feasible this stage; otherwise leave a clearly scoped follow-up and ensure the toolbar item is absent/disabled rather than faking success.
 
-### Frontend tests
+### Frontend tests (Vitest + RTL)
 
-- [ ] stale session preview event ignored;
-- [ ] older revision event ignored;
-- [ ] requested revision identity changes with revision;
-- [ ] viewer load failure produces controlled UI state.
+- [ ] `revision-guard`: stale session preview event ignored; older revision event ignored; newer revision accepted.
+- [ ] requested revision identity changes with revision (controller requests the new `revision` number).
+- [ ] viewer load failure (reject `getDocument`) produces a controlled UI error state, not an unhandled crash.
 
 ### Manual/E2E
 
@@ -638,16 +664,35 @@ Open .typ → Typst → committed PDF → PDF.js
 
 External editor saves update Tykuru automatically.
 
+### Architecture refs
+
+Implements: §11.2 (process launch), §11.3 (why watch), §12.1b (notify), §8.2 (one watcher), §3.5 (lifecycle), §2 (non-goals: no second build system).
+
 ### Implement
 
-- [ ] Start exactly one `typst watch` child per session.
-- [ ] Retain child handle.
-- [ ] Observe `candidate.pdf` output changes using Rust watcher.
-- [ ] Debounce/coalesce duplicate output notifications as needed.
-- [ ] Commit only stable valid candidates.
-- [ ] Emit `preview-updated`.
-- [ ] Terminate old watcher when document switches.
-- [ ] Terminate watcher on app exit.
+- [ ] `compiler/sidecar.rs`: add `start_watch(session) -> Result<CommandChild>` launching `typst watch <entry> <cache>/candidate.pdf --root <project_root>` via sidecar API, args separate, child handle retained in `CompilerProcess`.
+- [ ] `CompilerService`: `start(session)` spawns exactly one watcher; `stop(session)` kills the child and `wait()`s (with timeout) to confirm exit; `restart_on_root_change()`.
+- [ ] Replace `CompilerService::compile_once` usage in the open flow with `start_watch`; keep `compile_once` only as a test helper / fallback.
+- [ ] The candidate watcher from Stage 4 already observes `candidate.pdf` changes; ensure it is reused (debounce + stable read + commit) so watch-mode output flows through the same `commit_candidate` path.
+- [ ] `ShutdownCoordinator` (`shutdown.rs`): on app exit, iterate active session, `stop()` watcher, await exit, then allow close. Add an explicit Windows acceptance test (manual for now, automated in Stage 17/20) that upgrade/reinstall/shutdown leaves no `typst.exe`.
+- [ ] Reject a second watcher for the same active session (assert invariant in `start`).
+
+### Critical tests
+
+Integration test (real service + real sidecar):
+
+1. Copy fixture (with an import) to temp directory.
+2. Start Typst watch through `CompilerService::start`.
+3. Wait for revision 1 (via `preview-updated`).
+4. Modify `main.typ`; assert revision increases.
+5. Modify the imported `.typ`; assert revision increases again (proves Typst owns dependency graph, Tykuru does not).
+6. Stop session; assert child process exits (pid gone / `wait` completes).
+
+Also test:
+
+- [ ] starting a watch when one already exists for the session returns an error / no duplicate child.
+- [ ] rapid repeated saves coalesce; output watcher duplicate events do not publish corrupted revisions.
+- [ ] stale old session cannot publish after switching to a new file (old child killed before new publish).
 
 ### Critical tests
 
@@ -691,14 +736,28 @@ Tykuru functions as a useful preview companion for any external editor.
 
 Make editing robust while source is temporarily invalid.
 
+### Architecture refs
+
+Implements: §11.4 (diagnostics), §12.3 (last-good), §7.5 (UI states), §20 (events).
+
 ### Implement
 
-- [ ] Track compile state separately from preview revision.
-- [ ] Capture bounded compiler diagnostic output.
-- [ ] Show `Compiling`, `Ready`, `Error` in toolbar.
-- [ ] Show compact diagnostic banner/popover.
-- [ ] Never clear a valid current preview because the next compile fails.
-- [ ] Clear/update diagnostics after recovery.
+- [ ] `compiler/diagnostic.rs`: `CompileState { Idle | Compiling | Ready { revision } | Error { message, last_good_revision } }` stored on the session; `CompilerService` updates it (typst watch has no per-build exit, so derive `Compiling`→`Ready`/`Error` from candidate commit success/failure and a bounded stderr tail).
+- [ ] `commands/document.rs` / event channel: emit `compile-state-changed(session_id, state)` whenever state changes; frontend updates toolbar.
+- [ ] `src/components/preview/DiagnosticBanner.tsx`: compact banner/popover showing bounded diagnostic text; visible only in `Error`.
+- [ ] `Toolbar` compile-status chip renders `Compiling`/`Ready`/`Error` from `compile-state-changed`.
+- [ ] Last-good guarantee: `RevisionStore.current` is only updated on successful commit; an `Error` state never clears/rolls back the displayed revision.
+- [ ] On recovery (next successful commit), transition `Error` → `Ready{new_revision}` and clear the banner.
+
+### Test sequence (real Typst)
+
+```text
+valid source → revision N, state Ready(N)
+invalid source → state Error + revision N remains displayed
+valid source → revision N+1, state Ready(N+1), banner cleared
+```
+
+Automate by copying a fixture to temp, writing valid then invalid then valid source and asserting state + displayed revision via the event channel.
 
 ### Test sequence
 
@@ -732,32 +791,38 @@ Typst syntax errors behave like normal editor states, not application failures.
 
 Make live refresh visually stable.
 
+### Architecture refs
+
+Implements: §14.1 (view-state preservation), §12.2 (revision ordering/race).
+
 ### Implement
 
-Track:
+Track (`src/preview/view-state.ts`):
 
 ```text
-zoom mode/value
-current visible page
-relative offset within visible page
+scaleMode | scaleValue
+visiblePage
+relativeOffsetWithinPage  // fraction 0..1 of scroll position inside the visible page
 ```
 
-On new revision:
+On `preview-updated(session_id, revision)`:
 
-- [ ] keep old PDF until new load is ready;
-- [ ] reject old `SessionId` loads;
-- [ ] reject older `PreviewRevision` completions;
-- [ ] restore page/offset/zoom;
-- [ ] clamp page if pagination shrinks;
-- [ ] avoid stealing focus.
+- [ ] keep old PDF visible until the new load is ready (don't blank/remount).
+- [ ] reject old `session_id` loads via `revision-guard.isSameSession`.
+- [ ] reject older `PreviewRevision` completions via `revision-guard.isNewerRevision`.
+- [ ] restore `page`, `offset`, `zoom` after the new document loads.
+- [ ] clamp `visiblePage` to the new document's page count if pagination shrank.
+- [ ] avoid stealing editor focus (manage focus so preview load doesn't move focus to the viewer).
 
-### Unit tests
+Implementation detail: `preview-controller.ts` maintains an in-flight load token; when a newer revision arrives mid-load, the older load result is discarded on arrival.
 
-- [ ] relative offset calculation;
-- [ ] page clamp;
-- [ ] page-width restoration;
-- [ ] numeric zoom restoration;
-- [ ] stale asynchronous load cannot replace newer load.
+### Unit tests (Vitest)
+
+- [ ] `computeRelativeOffset(scrollTop, pageTop, pageHeight)` returns clamped 0..1.
+- [ ] `clampPage(target, pageCount)` clamps to `[1, pageCount]`.
+- [ ] page-width restoration maps `scaleMode: 'page-width'` correctly.
+- [ ] numeric zoom restoration maps `scaleValue` correctly.
+- [ ] stale async load cannot replace newer: simulate load A started, load B started+finished, then A finished → displayed stays B.
 
 ### Manual
 
@@ -786,25 +851,22 @@ Normal edits feel like the current document changed instead of a whole new viewe
 
 Add lightweight editing while preserving preview-first design.
 
+### Architecture refs
+
+Implements: §15 (editor), §15.1 (scope), §15.2 (save path), §15.3 (self-write), §20 (commands).
+
 ### Implement
 
-- [ ] Install CodeMirror 6 modules deliberately.
-- [ ] Create `EditorPane` / `TypstEditor`.
-- [ ] Load source through narrow Rust command.
-- [ ] Add line numbers.
-- [ ] Add undo/redo.
-- [ ] Add basic bracket/quote behavior.
-- [ ] Support `Ctrl+S`.
-- [ ] Add 200–300 ms autosave debounce.
-- [ ] Add saved/saving/dirty indicator.
-- [ ] Keep editor state when collapsing pane.
-- [ ] Persist editor shown/hidden and split ratio.
-
-Do not add LSP/completion yet.
+- [ ] Install CodeMirror 6 modules deliberately: `codemirror`, `@codemirror/state`, `@codemirror/view`, `@codemirror/commands`, `@codemirror/language`, `@codemirror/lang-<typst-or-plain>` (syntax only — do NOT add any CodeMirror package that bundles a WASM/Typst compiler or alternative diagnostics authority). Plain text/indentation highlighting is acceptable if no Typst mode exists yet.
+- [ ] `src/components/editor/EditorPane.tsx` + `TypstEditor.tsx`: mounts CodeMirror with extensions: line numbers, history (undo/redo), bracket/quote behavior, `Ctrl+S` keymap, basic indentation. No LSP/completion.
+- [ ] `src/components/editor/SaveStatus.tsx`: `saved`/`saving`/`dirty` indicator.
+- [ ] `src/editor/autosave.ts`: 200–300 ms debounce; `src/editor/editor-state.ts`: dirty/saving/last-saved snapshot.
+- [ ] Load source via new command `read_source(session_id) -> String` (narrow; only the active entry file). Show in editor on open.
+- [ ] Collapse: `WorkspaceSplit` toggles editor pane; editor `EditorView` state is retained (keep the CM instance mounted but hidden, or serialize state) so toggling doesn't lose buffer/undo. Persist `editor_visible` + `split_ratio` in settings (see Stage 16).
 
 ### Backend save API
 
-Implement a dedicated `SourceWriter` save transaction rather than a bare `std::fs::write`.
+Implement a dedicated `SourceWriter` (`source/write.rs`) save transaction rather than a bare `std::fs::write`. `SourceWriter::save(session, text, expected_disk_revision) -> Result<DiskRevision>`.
 
 Conceptually:
 
@@ -820,24 +882,24 @@ write_file(path, data)
 
 The transaction revalidates the expected disk revision, prepares a replacement (temp sibling / safe write), performs a final revision check, commits (atomic replace where practical), and records the self-write identity. Tykuru detects external-edit conflicts and never knowingly overwrites a newer disk revision; it does not aggressively lock the source file so it stays a good citizen alongside other editors.
 
-### Frontend tests
+### Frontend tests (Vitest)
 
-- [ ] typing marks dirty;
-- [ ] debounce sends one save for a burst;
-- [ ] continued typing resets timer;
-- [ ] Ctrl+S saves immediately;
-- [ ] collapse preserves buffer/editor object appropriately;
+- [ ] typing marks dirty.
+- [ ] debounce sends one save for a burst of keystrokes within the window.
+- [ ] continued typing resets timer.
+- [ ] `Ctrl+S` saves immediately (cancels debounce).
+- [ ] collapse preserves buffer/editor object appropriately (no content loss).
 - [ ] document switch does not leak old buffer into new session.
 
-### Backend tests
+### Backend tests (`cargo test`)
 
-- [ ] only active entry file can be saved;
-- [ ] stale session save rejected;
-- [ ] Unicode round-trip preserved;
-- [ ] write error returned structurally;
-- [ ] expected disk revision validated;
-- [ ] external modification during save gap is detected, not silently overwritten;
-- [ ] source write uses safe/atomic persistence (no truncated in-place overwrite).
+- [ ] only the active entry file can be saved.
+- [ ] stale session save rejected.
+- [ ] Unicode round-trip preserved.
+- [ ] write error returned structurally (not panic).
+- [ ] expected disk revision validated (mismatch rejected).
+- [ ] external modification during the save gap is detected, not silently overwritten.
+- [ ] source write uses safe/atomic persistence (no truncated in-place overwrite; verify temp-sibling + replace).
 
 ### E2E
 
@@ -868,31 +930,28 @@ Tykuru supports both preview-only and minimal split edit/preview workflows.
 
 Prevent data loss when an external editor changes the same file.
 
+### Architecture refs
+
+Implements: §16 (external editor sync), §15.3 (self-write detection), §12.1b (notify), §8.3 (SessionId).
+
 ### Implement
 
-- [ ] Watch active entry file for editor synchronization.
-- [ ] Track `DiskRevision`/hash or equivalent stable snapshot identifier.
-- [ ] Track Tykuru's own last successful write.
-- [ ] Ignore equivalent self-write notification.
-- [ ] Reload external changes when editor is clean.
-- [ ] Enter Conflict when external change occurs with pending Tykuru edits.
-- [ ] Stop autosave while in Conflict.
-
-Conflict actions:
-
-```text
-Reload external
-Keep my version
-```
+- [ ] Extend `source/external_watch.rs`: watch `parent(entry.typ)` non-recursively; filter events for the entry file name; debounce; on a hint, `re-stat`/`re-read` the entry and compare a stable snapshot identifier (`DiskRevision` = content hash or mtime+size) against the last known disk revision.
+- [ ] Track `DiskRevision` per session and Tykuru's own last successful write revision (`SourceWriter` records it). Ignore notifications whose new `DiskRevision` equals the self-write identity (no spurious reload/cursor jump).
+- [ ] `src/editor/source-sync.ts`: state machine `Clean | Dirty | Saving | Conflict`.
+  - external change while `Clean` → reload buffer from disk (preserve cursor where possible), update `DiskRevision`.
+  - external change while `Dirty` (pending local edits) → enter `Conflict`; stop autosave; emit `source-conflict` event.
+- [ ] Conflict UI: `Reload external` (discard local pending buffer, load disk) and `Keep my version` (explicit confirm → `save_source` with current expected disk revision, then resume normal state). Never auto-resolve.
+- [ ] Emit `source-changed` when an external reload occurs (frontend can show a subtle indicator).
 
 ### Tests
 
-- [ ] external save while clean reloads editor;
-- [ ] self-save does not cause unnecessary cursor reset;
-- [ ] external save while dirty enters Conflict;
-- [ ] no automatic write happens during Conflict;
-- [ ] Reload external produces disk version;
-- [ ] Keep my version requires explicit action and then writes local version.
+- [ ] external save while `Clean` reloads editor with disk content.
+- [ ] self-save's notification does not cause unnecessary cursor reset (matched `DiskRevision`).
+- [ ] external save while `Dirty` enters `Conflict`; autosave suspended.
+- [ ] no automatic write happens during `Conflict`.
+- [ ] `Reload external` produces the disk version in the buffer.
+- [ ] `Keep my version` requires explicit action and then writes the local version (and only then).
 
 ### Manual
 
@@ -918,26 +977,28 @@ Internal and external editing can safely coexist.
 
 Make release/dev executable accept a Typst file path directly.
 
+### Architecture refs
+
+Implements: §9 (opening), §9.1 (path validation), §20 (boundary), §21 (untrusted args).
+
 ### Implement
 
-- [ ] Parse initial process arguments.
-- [ ] Normalize valid Windows paths.
-- [ ] Handle quoted paths naturally through argv.
-- [ ] Normalize supported `file:///` argument if needed.
-- [ ] Ignore unrelated flags/URLs.
-- [ ] Route result through the same `OpenRequestRouter` as file dialog.
+- [ ] `open_request.rs`: `parse_launch_args(args: Vec<String>) -> Option<PathBuf>` that selects the first argument that is a valid `.typ` path; converts `file:///C:/...` to a path; ignores `--flag`, URLs, and empty input. Returns `None` (not an error) when no document argument is present, so normal window launch is unaffected.
+- [ ] In `lib.rs` run setup, read `std::env::args()` once; if a path is parsed, open it through `OpenRequestRouter` after the window is created (or queue until ready). Never shell-interpolate.
+- [ ] Single-instance forwarding (Stage 12) reuses the same `parse_launch_args`.
 
 ### Rust tests
 
-Cover:
+`parse_launch_args` cover:
 
 ```text
-C:\paper\main.typ
-C:\My Paper\main.typ
-C:\用户\论文.typ
-file:///C:/paper/main.typ
---flag
-https://example.com/file.typ
+["tykuru.exe","C:\\paper\\main.typ"]        -> Some(C:\paper\main.typ)
+["tykuru.exe","C:\\My Paper\\main.typ"]     -> Some(... spaces ...)
+["tykuru.exe","C:\\用户\\论文.typ"]          -> Some(... Unicode ...)
+["tykuru.exe","file:///C:/paper/main.typ"]  -> Some(C:\paper\main.typ)
+["tykuru.exe","--flag"]                     -> None
+["tykuru.exe","https://example.com/file.typ"] -> None
+["tykuru.exe"]                              -> None
 ```
 
 ### Manual Windows
@@ -964,22 +1025,25 @@ Launching `tykuru.exe <file.typ>` opens the expected document.
 
 Multiple Explorer opens reuse the one Tykuru window.
 
+### Architecture refs
+
+Implements: §9.2 (single-instance), §20 (boundary), §8.2 (teardown), §8.3 (stale rejection).
+
 ### Implement
 
-- [ ] Add/register Tauri single-instance plugin in required order.
-- [ ] Parse second-instance arguments using existing parser.
-- [ ] Forward valid path through `OpenRequestRouter`.
-- [ ] Restore minimized window.
-- [ ] Focus/show window.
-- [ ] Tear down old active session safely before switching.
+- [ ] Add `tauri-plugin-single-instance` to `Cargo.toml` and `lib.rs` plugin registration (in correct order relative to other plugins).
+- [ ] In the single-instance callback, read the new process args, run `parse_launch_args` (Stage 11), and if a path is found, route through `OpenRequestRouter`.
+- [ ] Before switching, call `SessionManager::close()` (tears down compiler watcher + watchers), then open B.
+- [ ] Restore minimized window (`window.show()`, `set_focus()`, `unminimize()`).
+- [ ] Reuse the existing `preview-updated`/`compile-state-changed` event handlers; they already carry `session_id`, so stale A events are ignored after teardown.
 
 ### Tests
 
-Backend logic:
+Backend logic (simulate the routing, no GUI needed):
 
-- [ ] second open B replaces A;
-- [ ] stale A compiler event rejected;
-- [ ] stale A preview event rejected.
+- [ ] second open B replaces A (manager holds B as active).
+- [ ] a compiler event stamped with A's `session_id` after teardown is rejected by `RevisionStore`/controller.
+- [ ] a preview event stamped with A's `session_id` after teardown is rejected.
 
 Manual Windows:
 
@@ -987,7 +1051,7 @@ Manual Windows:
 2. Launch `tykuru.exe B.typ`.
 3. Confirm only one main window remains.
 4. Confirm B is loaded.
-5. Confirm no orphan watcher for A.
+5. Confirm no orphan watcher for A (process list shows no `typst.exe` for A).
 
 ### Commit
 
@@ -1007,19 +1071,23 @@ Tykuru has deterministic one-window document ownership.
 
 Make Tykuru appear as a Windows Typst document application.
 
+### Architecture refs
+
+Implements: §9.3 (Windows association), §20 (boundary).
+
 ### Implement
 
-- [ ] Add Tauri `bundle.fileAssociations` for `typ`.
-- [ ] Set product description/metadata.
-- [ ] Ensure association launches executable with document argument.
-- [ ] Do not forcibly make Tykuru default without user choice.
+- [ ] Add to `tauri.conf.json` `bundle.fileAssociations`: ext `typ`, name `Typst Document`, description, and a per-target command/icon registration. This makes Tykuru *available* as a handler.
+- [ ] Ensure the installer/launcher passes the double-clicked path as a command-line argument so Stage 11/12 routing handles it.
+- [ ] Do not set Tykuru as the forced default; Windows/user choice remains authoritative (§9.3).
+- [ ] Product metadata (publisher/description) set for installer + association display.
 
 ### Manual installed-build tests
 
 - [ ] **Open with → Tykuru** appears/works.
-- [ ] Set Tykuru as association manually.
+- [ ] Set Tykuru as association manually via Windows defaults UI.
 - [ ] Double-click `.typ`.
-- [ ] File opens in running or new Tykuru as appropriate.
+- [ ] File opens in running or new Tykuru as appropriate (single-instance in Stage 12 reuses the window).
 - [ ] path with spaces works;
 - [ ] Unicode path works.
 
@@ -1043,32 +1111,34 @@ feat(windows): register typ document file association
 
 Avoid breaking common valid Typst project layouts.
 
+### Architecture refs
+
+Implements: §10 (project root), §11.2 (restart watcher), §18 (settings), §3.1 (font discovery owned by Typst).
+
 ### Project root
 
-- [ ] default to entry parent;
-- [ ] add **Set Project Root…** dialog;
-- [ ] validate root;
-- [ ] persist per-document override;
-- [ ] restart watcher on root change;
-- [ ] keep old preview until new root compile succeeds.
+- [ ] `session/root.rs`: `ProjectRootService::set_root(session, path)` validates (canonicalize, is directory), persists an override keyed by canonical entry path in `SettingsV1.root_overrides`, then restarts the compiler watcher with the new `--root`.
+- [ ] Add **Set Project Root…** dialog (`components/` using dialog + path from `tauri-plugin-dialog` folder picker) calling `set_project_root(session_id, root)`.
+- [ ] Default remains `parent(entry)` when no override exists.
+- [ ] Keep old preview visible until the new root compile succeeds (last-good guarantee preserved through `RevisionStore.current`).
 
 ### Fonts
 
-First verify system font behavior from Typst sidecar.
+First verify system font behavior from Typst sidecar (system fonts already covered by `fixtures/fonts`).
 
 If a requirement exists:
 
-- [ ] add custom font directory setting;
-- [ ] pass Typst-supported font path option;
+- [ ] add custom font directory setting to `SettingsV1`;
+- [ ] pass Typst-supported font path option (`--font-path`) to the sidecar;
 - [ ] test spaces/Unicode.
 
 ### Tests
 
-- [ ] imports within parent root;
-- [ ] document requiring manually higher root;
-- [ ] invalid/disappearing root;
-- [ ] system font fixture;
-- [ ] custom font path if feature exists.
+- [ ] imports within parent root resolve and publish a revision.
+- [ ] document requiring a manually higher root: setting root publishes a revision that fails under the default root.
+- [ ] invalid/disappearing root: `set_root` returns structured error; session stays open with prior preview.
+- [ ] system font fixture renders.
+- [ ] custom font path if feature exists (spaces/Unicode).
 
 ### Commit
 
@@ -1127,6 +1197,19 @@ cached Typst package
 uncached package requiring network
 ```
 
+### Required fixture artifacts
+
+Ensure these fixtures exist and are checked in (Stage 3 created the base set; add the rest here):
+
+- [ ] `fixtures/multipage/main.typ` — 12+ pages of varied content (to exercise viewport preservation and scrolling).
+- [ ] `fixtures/large/main.typ` — a sizable document (many pages / repeated content) used for the `fixtures/large` performance benchmark referenced in §13 (deferred custom protocol decision).
+- [ ] `fixtures/fonts/main.typ` — uses a system font explicitly.
+- [ ] A runtime temp-path test (not committed) for Unicode source paths.
+
+### Integration harness
+
+Add a Rust integration test (`tests/integration/`) that, for each fully-local fixture, copies it to a temp dir, starts the real `CompilerService` watch, asserts a revision is published, and (where applicable) asserts the revision PDF is non-trivial and starts with `%PDF-`. Run via `pnpm typst:fixtures`.
+
 ### Commit
 
 ```text
@@ -1135,7 +1218,7 @@ test(typst): add representative compatibility fixture suite
 
 ### Exit gate
 
-The project has executable evidence for its compatibility claims.
+The project has executable evidence for its compatibility claims (fixtures run against the real sidecar in CI).
 
 ---
 
@@ -1157,28 +1240,28 @@ Ctrl+0       Reset/page-width preview
 Ctrl+\       Toggle editor if conflict-free on target keyboards
 ```
 
+### Architecture refs
+
+Implements: §18 (settings), §7.4 (themes), §19 (UI), §27.3 (settings persistence).
+
 ### Implement
 
-- [ ] accessible tooltip/labels for icon buttons;
-- [ ] recent files, bounded list;
-- [ ] missing recent file handling;
-- [ ] theme selection;
-- [ ] remember editor split ratio;
-- [ ] remember window state where practical;
-- [ ] typed `SettingsV1` struct serialized to JSON;
-- [ ] atomic/safe settings persistence (temp sibling + replace);
-- [ ] compact diagnostic presentation;
-- [ ] sensible focus management;
-- [ ] minimum window sizes;
-- [ ] no unnecessary permanent sidebar.
+- [ ] `settings/model.rs`: `SettingsV1 { version: u32, theme: Theme, editor_visible: bool, split_ratio: f64, recent_files: BoundedRecentFiles, root_overrides: RootOverrideMap, window_state: Option<WindowState> }` with `Default` and a `migrate` step keyed on `version`.
+- [ ] `settings/store.rs`: load from `<config>/settings.json`; on write, serialize to a temp sibling then atomic rename (or use a mature atomic-write crate). Corrupt/missing file falls back to `Default` without crashing.
+- [ ] `commands/settings.rs`: `get_settings() -> SettingsV1`, `update_settings(patch: SettingsPatch) -> SettingsV1` (validated, bounded). Persist on change.
+- [ ] Wire persisted values: theme (Stage 1 provider reads settings), `editor_visible` + `split_ratio` (Stage 9), `recent_files` (push on open, bounded ~10, prune missing via a `PruneMissing` action), `root_overrides` (Stage 14), window bounds where practical.
+- [ ] Keyboard shortcuts (global window listeners): `Ctrl+O` open, `Ctrl+S` save when editor active/dirty, `Ctrl+F` focus-surface find, `Ctrl+=`/`Ctrl+-` zoom, `Ctrl+0` page-width reset, `Ctrl+\` toggle editor when not in `Conflict`.
+- [ ] Accessible `aria-label`/`Tooltip` on all icon buttons (carried from Stage 1; verify coverage).
+- [ ] Compact diagnostic presentation (`DiagnosticBanner`), sensible focus management (preview load must not steal editor focus), minimum window sizes, no permanent sidebar.
 
 ### Tests
 
-- [ ] keyboard activation;
-- [ ] shortcuts respect focus;
-- [ ] recent missing file is handled;
-- [ ] theme state persists;
-- [ ] narrow window remains usable.
+- [ ] keyboard activation: each shortcut triggers the intended action.
+- [ ] shortcuts respect focus: `Ctrl+S` only saves when editor focused/dirty; `Ctrl+F` targets the focused surface.
+- [ ] recent missing file is handled (pruned, no crash on open).
+- [ ] theme state persists across reload (write settings, reload, assert `class="dark"`).
+- [ ] settings write uses atomic replace (simulate crash mid-write; reload yields valid previous or default, never a truncated file).
+- [ ] narrow window (1024×640) remains usable (no overflow/clipped controls).
 
 ### Commit
 
@@ -1204,56 +1287,58 @@ Use the current Tauri-supported WebDriver/WebdriverIO approach suitable for Wind
 
 ### E2E scenarios
 
+Use the current Tauri-supported WebDriver/WebdriverIO approach suitable for Windows, driving a real built app (`pnpm build:windows` artifact or `tauri dev` in the runner). Each scenario asserts against observable DOM/process state, not internal logs.
+
 #### open-document
 
 - [ ] launch app;
-- [ ] open fixture through test-accessible flow;
-- [ ] filename visible;
-- [ ] status becomes Ready;
-- [ ] preview exists.
+- [ ] open fixture through test-accessible flow (dialog automation or CLI arg);
+- [ ] filename visible in toolbar;
+- [ ] `compile-state-changed` reaches `Ready`;
+- [ ] PDF canvas / text layer present in preview pane.
 
 #### live-preview
 
 - [ ] open temporary fixture copy;
-- [ ] modify source externally;
-- [ ] wait for newer revision;
-- [ ] app stays responsive.
+- [ ] modify source externally (write file from test);
+- [ ] wait for newer `preview-updated` revision;
+- [ ] app stays responsive (no hang/crash).
 
 #### dependency-watch
 
 - [ ] open imports fixture;
 - [ ] modify imported file;
-- [ ] verify newer revision.
+- [ ] verify newer revision (proves Typst dependency graph, not Tykuru).
 
 #### error-recovery
 
-- [ ] make source invalid;
+- [ ] make source invalid (write bad Typst);
 - [ ] status Error;
-- [ ] existing preview remains;
+- [ ] existing preview canvas remains;
 - [ ] repair file;
-- [ ] status Ready/new revision.
+- [ ] status Ready / new revision.
 
 #### editor
 
 - [ ] expand editor;
 - [ ] edit;
-- [ ] autosave;
-- [ ] verify disk bytes;
+- [ ] autosave (wait debounce);
+- [ ] verify disk bytes changed;
 - [ ] verify preview advances.
 
 #### switch-document
 
 - [ ] open A;
 - [ ] open B;
-- [ ] B is active;
-- [ ] late A events do not alter UI.
+- [ ] B is active (toolbar filename = B);
+- [ ] late A events do not alter UI (assert revision belongs to B).
 
 #### shutdown
 
 - [ ] open document;
-- [ ] ensure watcher exists;
+- [ ] ensure watcher exists (process list `typst.exe`);
 - [ ] close Tykuru;
-- [ ] verify watcher exits.
+- [ ] verify `typst.exe` exited (no orphan).
 
 #### single-instance
 
@@ -1261,7 +1346,7 @@ When reliable in runner:
 
 - [ ] launch first instance;
 - [ ] invoke second with `.typ`;
-- [ ] existing window receives document.
+- [ ] existing window receives document (single window, filename = second).
 
 ### Commit
 
@@ -1323,7 +1408,7 @@ ci(windows): run desktop e2e on windows
 
 ### Exit gate
 
-Pull requests cannot silently merge changes that break the core verification suite.
+Pull requests cannot silently merge changes that break the core verification suite. The pipeline enforces the coding standards in `architecture.md §6.2` (`cargo clippy -- -D warnings`, strict `tsc`, lint, tests, real-sidecar fixtures).
 
 ---
 
@@ -1416,7 +1501,7 @@ A non-developer can install and use Tykuru on clean Windows.
 
 ### Performance measurements
 
-Measure independently:
+Measure independently (use `fixtures/large`):
 
 ```text
 app startup
@@ -1430,6 +1515,8 @@ large-document scrolling
 ```
 
 Only optimize measured bottlenecks.
+
+Decision gate: run the `fixtures/large` preview benchmark across binary IPC. Only if it shows a real transfer/memory problem, revisit the deferred custom range-capable protocol (`PDFDataRangeTransport`, §13) as a separate architecture change with its own approval. Do not pre-implement it.
 
 ### Commit
 

@@ -300,130 +300,135 @@ tykuru/
 ├─ config/
 │  └─ versions.toml                # pinned Typst/tool versions
 │
-├─ src/
+├─ src/                            # React/TypeScript WebView frontend
 │  ├─ main.tsx
 │  ├─ app/
 │  │  ├─ App.tsx
 │  │  ├─ AppLayout.tsx
-│  │  └─ app-state.ts
+│  │  └─ app-state.ts              # DocumentUiState reducer + ThemeProvider
 │  │
-│  ├─ components/
-│  │  ├─ ui/                       # shadcn-owned/copied primitives
-│  │  ├─ toolbar/
-│  │  │  └─ Toolbar.tsx
-│  │  ├─ editor/
-│  │  │  ├─ EditorPane.tsx
-│  │  │  ├─ TypstEditor.tsx
-│  │  │  └─ SaveStatus.tsx
-│  │  ├─ preview/
-│  │  │  ├─ PreviewPane.tsx
-│  │  │  ├─ PdfViewer.tsx
-│  │  │  ├─ PreviewToolbar.tsx
-│  │  │  └─ DiagnosticBanner.tsx
-│  │  └─ layout/
-│  │     └─ WorkspaceSplit.tsx
+│  ├─ components/                  # presentational React components
+│  │  ├─ ui/                       # shadcn-owned/copied primitives (Base UI)
+│  │  ├─ toolbar/Toolbar.tsx
+│  │  ├─ editor/                   # EditorPane, TypstEditor, SaveStatus
+│  │  ├─ preview/                  # PreviewPane, PdfViewer, PreviewToolbar, DiagnosticBanner
+│  │  └─ layout/WorkspaceSplit.tsx
 │  │
-│  ├─ bridge/
-│  │  ├─ commands.ts
-│  │  ├─ events.ts
-│  │  └─ types.ts
+│  ├─ bridge/                      # ONLY place that talks to Tauri IPC
+│  │  ├─ commands.ts               # typed invoke() wrappers
+│  │  ├─ events.ts                 # event-name constants
+│  │  └─ types.ts                  # types mirroring Rust command/event payloads
 │  │
-│  ├─ editor/
+│  ├─ editor/                      # editor logic (no React components)
 │  │  ├─ autosave.ts
-│  │  ├─ source-sync.ts
+│  │  ├─ source-sync.ts            # Clean/Dirty/Saving/Conflict state machine
 │  │  └─ editor-state.ts
 │  │
-│  ├─ preview/
-│  │  ├─ preview-controller.ts
+│  ├─ preview/                     # preview logic (no React components)
+│  │  ├─ preview-controller.ts     # revision event → getDocument({ data })
 │  │  ├─ view-state.ts
-│  │  └─ revision-guard.ts
+│  │  └─ revision-guard.ts         # isNewerRevision / isSameSession
 │  │
-│  ├─ hooks/
-│  ├─ lib/
-│  │  └─ utils.ts                  # shadcn utility helper
-│  └─ styles/
-│     └─ globals.css               # Tailwind + theme tokens + integrations
+│  ├─ hooks/                       # reusable React hooks
+│  ├─ lib/utils.ts                 # shadcn cn() helper
+│  └─ styles/globals.css           # Tailwind + theme tokens
 │
-├─ src-tauri/
+├─ src-tauri/                      # Rust backend (authority)
 │  ├─ Cargo.toml
 │  ├─ Cargo.lock
 │  ├─ build.rs
 │  ├─ tauri.conf.json
-│  ├─ capabilities/
-│  │  └─ default.json
-│  ├─ binaries/
-│  │  └─ typst-<target-triple>[.exe]
+│  ├─ capabilities/default.json    # minimal permissions (no fs/shell/process)
+│  ├─ binaries/typst-<target-triple>[.exe]
 │  ├─ icons/
 │  └─ src/
-│     ├─ main.rs
-│     ├─ lib.rs
-│     ├─ app_state.rs
-│     ├─ open_request.rs
-│     ├─ shutdown.rs
+│     ├─ main.rs                   # entry → tykuru_lib::run()
+│     ├─ lib.rs                    # app builder, plugin registration, run()
+│     ├─ app_state.rs              # AppState (managed state wrappers)
+│     ├─ open_request.rs           # OpenRequestRouter + arg/path parsing
+│     ├─ shutdown.rs               # ShutdownCoordinator
 │     │
-│     ├─ session/
-│     │  ├─ mod.rs
-│     │  ├─ manager.rs
-│     │  ├─ model.rs
-│     │  └─ root.rs
+│     ├─ session/                  # one active document
+│     │  ├─ mod.rs  manager.rs  model.rs  root.rs
 │     │
-│     ├─ compiler/
-│     │  ├─ mod.rs
-│     │  ├─ sidecar.rs
-│     │  ├─ output_watch.rs
-│     │  └─ diagnostic.rs
+│     ├─ compiler/                 # owns Typst sidecar lifecycle
+│     │  ├─ mod.rs  sidecar.rs  output_watch.rs  diagnostic.rs
 │     │
-│     ├─ preview/
-│     │  ├─ mod.rs
-│     │  ├─ revisions.rs
-│     │  └─ delivery.rs             # binary IPC get_preview_pdf
+│     ├─ preview/                  # candidate → immutable revision → IPC
+│     │  ├─ mod.rs  revisions.rs  delivery.rs
 │     │
-│     ├─ source/
-│     │  ├─ mod.rs
-│     │  ├─ read.rs
-│     │  ├─ write.rs                # SourceWriter save transaction
-│     │  └─ external_watch.rs
+│     ├─ source/                   # disk authority for the entry file
+│     │  ├─ mod.rs  read.rs  write.rs (SourceWriter)  external_watch.rs
 │     │
-│     ├─ settings/
-│     │  ├─ mod.rs
-│     │  ├─ model.rs                # typed SettingsV1 struct
-│     │  └─ store.rs                # atomic/safe persistence
+│     ├─ settings/                 # typed, atomic persistence
+│     │  ├─ mod.rs  model.rs  store.rs
 │     │
-│     └─ commands/
-│        ├─ mod.rs
-│        ├─ document.rs
-│        ├─ editor.rs
-│        └─ settings.rs
+│     └─ commands/                 # narrow Tauri command surface only
+│        ├─ mod.rs  document.rs  editor.rs  settings.rs  preview.rs
 │
-├─ fixtures/
-│  ├─ basic/
-│  ├─ imports/
-│  ├─ images/
-│  ├─ bibliography/
-│  ├─ unicode/
-│  ├─ multipage/
-│  ├─ errors/
-│  ├─ fonts/
-│  └─ large/
+├─ fixtures/                       # real Typst sources for integration tests
+│  ├─ basic/ imports/ images/ bibliography/ unicode/
+│  ├─ multipage/ errors/ fonts/ large/
 │
 ├─ tests/
-│  ├─ frontend/
-│  ├─ integration/
-│  └─ e2e/
+│  ├─ frontend/                    # Vitest + RTL
+│  ├─ integration/                 # Rust tests driving the real sidecar
+│  └─ e2e/                         # WebdriverIO desktop flows
 │
 ├─ scripts/
-│  ├─ fetch_typst.ps1
-│  ├─ verify_typst.ps1
-│  ├─ verify.ps1
-│  └─ build_windows.ps1
+│  ├─ fetch_typst.ps1  verify_typst.ps1  verify.ps1  build_windows.ps1
 │
-└─ .github/
-   └─ workflows/
-      ├─ verify.yml
-      └─ windows-release.yml
+└─ .github/workflows/
+   ├─ verify.yml  windows-release.yml
 ```
 
-Do not create every leaf file immediately. The tree defines ownership boundaries.
+The tree is the authoritative ownership map. Do not create every leaf file immediately; create a module when its stage begins. Every new capability must fit into exactly one of the existing top-level boundaries — if it does not, extend the architecture before adding it.
+
+### 6.1 Codebase structure principles
+
+These principles keep the tree future-proof and easy to manage. They are enforced by review and by `cargo clippy` / `tsc` / lint gates.
+
+- **Two-sided boundary.** The WebView frontend (`src/`) is untrusted-ish presentation; the Rust backend (`src-tauri/src/`) is the authority. Native logic (filesystem, process, cache, paths, Windows, settings) never lives in React.
+- **One IPC chokepoint.** All frontend↔backend communication goes through `bridge/` on the frontend and `commands/` + typed event channels on the backend. No ad-hoc `invoke` strings scattered in components; no direct filesystem/process access from the WebView.
+- **Feature logic is separated from UI.** `editor/` and `preview/` hold pure logic and state machines; `components/` hold only React presentation. This lets logic be unit-tested without a DOM and reused if the UI layer changes.
+- **Backend is modular by responsibility.** `session`, `compiler`, `preview`, `source`, `settings` are independent verticals that share `AppState` and a `SessionId`. New cross-cutting behavior belongs in a focused module, never as a grab-bag utility.
+- **Commands are narrow and typed.** Each Tauri command maps to one capability (e.g. `save_source`, `get_preview_pdf`). Prefer `SessionId`/revision identity over raw paths. See §20.
+- **Types are shared by mirror.** Frontend `bridge/types.ts` mirrors Rust payload structs. Keep them in sync; treat a mismatch as a build-breaking change.
+- **Tests live beside their layer.** Frontend logic under `tests/frontend`, Rust integration under `tests/integration`, desktop flows under `tests/e2e`, fixtures under `fixtures/`. Real Typst behavior is validated against the bundled sidecar, never mocked away.
+- **No generated/vendor output in source control.** `node_modules/`, `dist/`, `src-tauri/target/`, Tykuru cache, and temporary PDFs are git-ignored. See §27.5.
+- **Stable module surface.** Public module APIs (`mod.rs` re-exports) should change only with an architecture update. Internal refactors stay within a module.
+
+### 6.2 Coding standards
+
+Standards are enforced by the verification gates (§27.3) and by `cargo clippy -- -D warnings`, `tsc --noEmit` (strict), `pnpm lint`, and `pnpm test`. They are not advisory.
+
+#### 6.2.1 Rust (backend)
+
+- Strict, explicit error handling: define typed `Error`/`Result` per module (e.g. `thiserror`); do not use `unwrap()`/`expect()` on realistic failure paths (file I/O, process spawn, IPC).
+- Use `Path`/`PathBuf` everywhere for paths; never build paths with string concatenation or shell interpolation.
+- Spawn Typst only through Tauri sidecar APIs with arguments passed separately — never `cmd.exe`/`powershell`/`sh`.
+- Expose only narrow typed Tauri commands; never generic filesystem/process commands to the frontend.
+- Cache deletion and settings writes must be root-bounded (Tykuru cache root, settings path only).
+- Concurrency is correct via `SessionId` checks first, `CancellationToken`/task handles second (§8.3).
+- Keep modules small and single-responsibility; `mod.rs` is the public surface.
+- Document non-obvious constraints (TOCTOU, Windows sharing, async races) with comments; do not restate code.
+
+#### 6.2.2 TypeScript / React (frontend)
+
+- TypeScript strict mode; `noUncheckedIndexedAccess` on. Avoid `any`; model backend payloads explicitly in `bridge/types.ts`.
+- Handle async races explicitly: always carry `sessionId`/`revision` and discard stale results (see `revision-guard.ts`).
+- Keep filesystem/process/cache/Windows logic out of React — it lives in Rust and is reached only via `bridge/`.
+- Reuse shadcn/ui + Base UI primitives and Tailwind semantic tokens; avoid duplicate controls and hard-coded colors.
+- Pure logic (autosave, source-sync, preview-controller, revision-guard, view-state) is framework-agnostic and unit-tested without a DOM.
+- Components are presentational and receive state via props/context, not by reaching into backend directly.
+
+#### 6.2.3 Cross-cutting
+
+- Conventional Commits (`type(scope): message`); atomic, buildable commits (§27).
+- Line length and formatting follow `.editorconfig` and `cargo fmt` / Prettier-equivalent; CI blocks unformatted code.
+- No secrets, generated output, caches, or temporary PDFs are committed (§27.5).
+- Update `architecture.md`/`work-plan.md` when behavior or boundaries change; docs must match implementation.
+- Prefer small, focused diffs; no unrelated refactors or speculative infrastructure in a feature change.
 
 ---
 
