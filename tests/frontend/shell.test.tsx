@@ -1,9 +1,23 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ThemeProvider, clampSplitRatio, useAppState } from "@/app/app-state";
 import { StartScreen } from "@/components/StartScreen";
 import { Toolbar } from "@/components/toolbar/Toolbar";
 import { ResizablePanels } from "@/components/ui/resizable";
+
+// The real preview pane subscribes to Tauri events; mock the event bridge so
+// rendering the layout does not reject on the missing Tauri runtime.
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(() => Promise.resolve(() => {})),
+}));
+vi.mock("@/bridge/commands", () => ({
+  getActiveSession: vi.fn(async () => null),
+  openDocumentDialog: vi.fn(async () => null),
+  openDocument: vi.fn(),
+  getPreviewPdf: vi.fn(async () => new ArrayBuffer(8)),
+}));
+
+import AppLayout from "@/app/AppLayout";
 
 const renderWithTheme = (ui: React.ReactNode) => render(<ThemeProvider>{ui}</ThemeProvider>);
 
@@ -89,5 +103,15 @@ describe("ThemeProvider", () => {
     );
     fireEvent.click(screen.getByText("set"));
     expect(document.documentElement.classList.contains("dark")).toBe(false);
+  });
+});
+
+describe("AppLayout preview wiring", () => {
+  it("mounts the real PDF preview pane, not the placeholder", () => {
+    renderWithTheme(<AppLayout filename="main.typ" onOpen={() => {}} />);
+    // The real preview pane renders its own header with a unique "Reset zoom"
+    // button; the removed placeholder rendered a bare centered message and had
+    // no zoom controls at all.
+    expect(screen.getByRole("button", { name: "Reset zoom" })).toBeInTheDocument();
   });
 });

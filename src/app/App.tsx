@@ -31,23 +31,21 @@ function Root() {
   );
 
   if (documentState.kind === "open") {
-    return (
-      <ThemeProvider>
-        <AppLayout filename={documentState.filename} onOpen={openFromDialog} />
-      </ThemeProvider>
-    );
+    return <AppLayout filename={documentState.filename} onOpen={openFromDialog} />;
   }
   return (
-    <ThemeProvider>
-      <StartScreen
-        onOpen={openFromDialog}
-        onOpenPath={openFromPath}
-        error={documentState.kind === "error" ? documentState.message : null}
-      />
-    </ThemeProvider>
+    <StartScreen
+      onOpen={openFromDialog}
+      onOpenPath={openFromPath}
+      error={documentState.kind === "error" ? documentState.message : null}
+    />
   );
 }
 
 export default function App() {
-  return <Root />;
+  return (
+    <ThemeProvider>
+      <Root />
+    </ThemeProvider>
+  );
 }

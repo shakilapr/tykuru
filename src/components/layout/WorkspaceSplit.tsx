@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { useAppState } from "@/app/app-state";
 import { EditorPane } from "@/components/editor/EditorPane";
-import { PreviewPane } from "@/components/preview/PreviewPane";
+import { PreviewPane } from "@/preview/PreviewPane";
 import { ResizablePanels } from "@/components/ui/resizable";
 import { openDocument } from "@/bridge/commands";
 

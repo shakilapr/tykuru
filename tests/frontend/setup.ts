@@ -15,3 +15,14 @@ if (!window.matchMedia) {
     }) as unknown as MediaQueryList;
 }
 
+// jsdom does not implement ResizeObserver; the preview pane tracks container
+// width with it. A no-op stub keeps layout tests focused on behavior.
+if (!("ResizeObserver" in window)) {
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  (window as unknown as { ResizeObserver: unknown }).ResizeObserver = ResizeObserverStub;
+}
+
