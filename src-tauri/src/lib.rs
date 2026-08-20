@@ -4,6 +4,7 @@ mod app_state;
 mod commands;
 mod compiler;
 mod open_request;
+mod preview;
 mod session;
 
 use app_state::AppState;
@@ -21,6 +22,7 @@ pub fn run() {
             commands::document::close_document,
             commands::document::get_active_session,
             commands::document::compile_document,
+            commands::preview::get_preview_pdf_command,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Tykuru");

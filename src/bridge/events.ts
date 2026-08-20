@@ -3,3 +3,4 @@
 
 export const SESSION_OPENED = "session-opened";
 export const SESSION_CLOSED = "session-closed";
+export const PREVIEW_UPDATED = "preview-updated";

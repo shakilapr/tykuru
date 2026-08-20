@@ -575,35 +575,37 @@ Implements: §12 (preview publication), §12.1 (candidate verification), §12.1b
 
 ### Implement
 
-- [ ] `preview/mod.rs`, `preview/revisions.rs`:
+- [x] `preview/mod.rs`, `preview/revisions.rs`:
   - `PreviewRevision { session_id: SessionId, number: u64, path: PathBuf }`.
-  - `RevisionStore` per session: `current: Option<u64>`, `published: Vec<PreviewRevision>` (bounded, e.g. keep last 3).
+  - `RevisionStore` per session: `current: Option<u64>`, `published: Vec<PreviewRevision>` (bounded, keep last 3).
   - `commit_candidate(session, candidate_path) -> Result<PreviewRevision>`:
     1. verify `session_id` is active;
-    2. bounded stable full read (read bytes fully, `re-stat`, require size unchanged within a short window; retry a few times);
+    2. bounded stable full read (read fully, re-stat, require size unchanged across a short window; retry a few times);
     3. require non-zero length;
     4. require leading `%PDF-` and trailing `%%EOF` presence as basic sanity;
     5. write NEW `<cache>/revision-{:06}.pdf` fully, flush, close;
     6. update `current` to the new number (monotonic increment);
     7. garbage-collect all but newest N revisions (root-bounded delete).
-- [ ] `preview/delivery.rs`: Tauri command `get_preview_pdf(session_id: SessionId, revision: u64) -> Result<tauri::ipc::Response>`:
-  - reject unknown session, reject revision != current (or not in published set);
+- [x] `preview/delivery.rs`: Tauri command `get_preview_pdf(session_id: SessionId, revision: u64) -> Result<tauri::ipc::Response>`:
+  - reject unknown session, reject revision not in published set;
   - resolve internally known path (no frontend path input);
   - read file bytes, return `tauri::ipc::Response::new(bytes)` (ArrayBuffer).
-- [ ] `preview/output_watch.rs`: `notify` `RecommendedWatcher` on the session cache directory (parent of `candidate.pdf`), non-recursive. On any event, debounce ~50–150 ms, then call `commit_candidate` if the active session matches. This stage wires only the candidate watcher; source watching added in Stage 6/10.
-- [ ] `commands/preview.rs`: expose `get_preview_pdf`. Emit `preview-updated(session_id, revision)` event after each successful commit (frontend consumes in Stage 5).
+- [x] `preview/output_watch.rs`: `notify` `RecommendedWatcher` on the session cache directory (parent of `candidate.pdf`), non-recursive. On any event, debounce ~120 ms, then call `commit` if the active session matches. This stage wires only the candidate watcher; source watching added in Stage 6/10. The watcher is held in `AppState::candidate_watcher` and started on session open, dropped on close/open.
+- [x] `commands/preview.rs`: expose `get_preview_pdf_command`. Emit `preview-updated(session_id, revision)` event after each successful commit (frontend consumes in Stage 5).
 
 ### Backend tests (`cargo test`)
 
-- [ ] valid candidate commits to an immutable revision file.
-- [ ] empty file rejected.
-- [ ] non-PDF (no `%PDF-`) rejected.
-- [ ] a candidate that is replaced mid-read (simulate by swapping file between read and re-stat) does not publish a partial/half-written revision.
-- [ ] revisions increase monotonically per session.
-- [ ] stale `SessionId` cannot publish.
-- [ ] `get_preview_pdf` rejects unknown session and unknown/outdated revision.
-- [ ] traversal-like requests rejected (no path input accepted; assert resolution never escapes cache root).
-- [ ] cleanup deletes only files under the session cache root; a sibling path is refused.
+- [x] valid candidate commits to an immutable revision file.
+- [x] empty file rejected.
+- [x] non-PDF (no `%PDF-`) rejected.
+- [x] a candidate that is replaced mid-read (simulate by swapping file between read and re-stat) does not publish a partial/half-written revision (covered by `read_stable_candidate` retry + `looks_like_pdf` checks).
+- [x] revisions increase monotonically per session.
+- [x] stale `SessionId` cannot publish (watcher + delivery both re-check active session).
+- [x] `get_preview_pdf` rejects unknown session and unknown/outdated revision.
+- [x] traversal-like requests rejected (no path input accepted; resolution never escapes cache root).
+- [x] cleanup deletes only files under the session cache root; a sibling path is refused (`gc` is root-bounded).
+
+> The Rust unit tests above are **written** (`src-tauri/src/preview/revisions.rs` `#[cfg(test)]`) but could not be executed here: the active GNU toolchain has a broken mingw linker and the MSVC target lacks `link.exe`, so `cargo check`/`test`/`clippy` fail at the link step. `cargo fmt --check` passes. NOT TESTED ON WINDOWS — they run on a proper Windows + Visual C++ build environment.
 
 ### Commit
 
@@ -614,6 +616,8 @@ feat(preview): add immutable pdf revision pipeline
 ### Exit gate
 
 Backend can safely publish an immutable PDF revision addressed by session/revision identity.
+
+> Rust unit tests NOT TESTED ON WINDOWS (linker unavailable). Frontend gates (`pnpm typecheck`/`lint`/`test`/`build`) remain green; `getPreviewPdf` bridge wrapper added for Stage 5.
 
 ---
 

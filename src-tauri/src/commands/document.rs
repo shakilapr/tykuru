@@ -5,7 +5,7 @@
 //! session ownership lives in `OpenRequestRouter` and `SessionManager`.
 
 use serde::Serialize;
-use tauri::State;
+use tauri::{Manager, State};
 
 use crate::app_state::AppState;
 use crate::compiler::{CompileError, CompileOutcome};
@@ -101,7 +101,17 @@ pub fn close_document(session_id: String, app: tauri::AppHandle) -> Result<(), C
         .lock()
         .map_err(|_| CommandError::LockPoisoned)?;
     match manager.close(&id) {
-        Ok(()) => Ok(()),
+        Ok(()) => {
+            // Tear down the candidate watcher and revisions for the closed session.
+            let state = app.state::<AppState>();
+            if let Ok(mut guard) = state.candidate_watcher.lock() {
+                *guard = None;
+            }
+            if let Ok(mut reg) = state.revision_registry.lock() {
+                reg.remove(&id);
+            }
+            Ok(())
+        }
         Err(CloseError::NoActiveSession) => Err(CommandError::NoActiveSession),
         Err(CloseError::NotActive) => Err(CommandError::NotActiveSession),
     }
@@ -151,6 +161,27 @@ fn register_session(
         .cloned()
         .ok_or(CommandError::NoActiveSession)?;
     drop(manager);
+
+    // Replace any prior watcher and start a candidate watcher for the new session
+    // (architecture §12.1b). The previous session's watcher is dropped here.
+    let watcher = crate::preview::output_watch::start_candidate_watcher(
+        app.clone(),
+        id.clone(),
+        session.cache_dir.clone(),
+        "candidate.pdf",
+    );
+    {
+        let mut guard = state
+            .candidate_watcher
+            .lock()
+            .map_err(|_| CommandError::LockPoisoned)?;
+        *guard = watcher.ok();
+    }
+    // Drop stale revisions from any previous session.
+    if let Ok(mut reg) = state.revision_registry.lock() {
+        reg.remove(&id);
+    }
+
     Ok(summarize(&session))
 }
 
