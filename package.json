@@ -1,0 +1,48 @@
+{
+  "name": "tykuru",
+  "private": true,
+  "version": "0.1.0",
+  "license": "GPL-3.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && cargo fmt --check --manifest-path src-tauri/Cargo.toml && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml",
+    "build": "tsc --noEmit && vite build",
+    "tauri": "tauri",
+    "typst:fixtures": "echo \"not implemented: typst fixtures not yet wired\" && exit 1",
+    "test:e2e": "echo \"not implemented: e2e not yet wired\" && exit 1",
+    "build:windows": "echo \"not implemented: windows build not yet wired\" && exit 1"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.6.0",
+    "@codemirror/language": "^6.10.2",
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/view": "^6.28.0",
+    "clsx": "^2.1.1",
+    "codemirror": "^6.0.1",
+    "lucide-react": "^0.400.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^2.4.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@testing-library/jest-dom": "^6.4.6",
+    "@testing-library/react": "^16.0.0",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "eslint": "^9.7.0",
+    "jsdom": "^24.1.0",
+    "pdfjs-dist": "^4.4.168",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.5.3",
+    "vite": "^5.3.3",
+    "vitest": "^2.0.2"
+  },
+  "packageManager": "pnpm@10.30.3"
+}
