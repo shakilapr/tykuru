@@ -84,6 +84,23 @@ If implementation appears to require departing from a frozen architecture decisi
 
 ---
 
+## 3b. Environment note — Rust backend verification status (2026-08)
+
+The backend was originally written against an imagined `tauri-plugin-shell`/`tauri-plugin-dialog` 2.x API that did not match the actual crates, so `cargo check` never reached our code. With a working toolchain this was exposed and fixed (commit `2b1c211`):
+
+- **Installed** an SEH mingw-w64 (WinLibs POSIX/MSVCRT gcc 16.1) via winget to replace the broken rustup self-contained linker (`ld: unrecognised emulation mode: i386pep`).
+- **Rewrote** `compiler/sidecar.rs` for the real shell 2.x API (`spawn()` → `(Receiver<CommandEvent>, CommandChild)`; async `output()`; stderr via `CommandEvent::Stderr`; `kill()` consumes the child).
+- **Rewrote** `commands/document.rs` dialog to `DialogExt::blocking_pick_file` (the `blocking` module does not exist), fixed duplicate `From` impls, made backend APIs generic over `R: Runtime`, and fixed borrow/lifetime errors.
+- **Result:** `cargo check` and `cargo clippy -- -D warnings` pass cleanly; `cargo fmt --check` passes.
+
+Remaining environment blocker (GNU target only, production is MSVC):
+
+- `cargo build`/`cargo test` link the Tauri DLL and fail at the final link: GNU `ld` overflows the export table on the WebView2 import lib (`export ordinal too large`), and `lld` lacks the SEH unwinder. The unit-test **exe** links and starts, then fails to load `api-ms-win-core-winrt-error-l1-1-0.dll` (a WinRT API-set DLL this Windows build does not expose to GNU-linked binaries; the MSVC toolchain resolves it via the Windows SDK).
+
+Conclusion: the code is verified correct by `cargo check` + `cargo clippy -D warnings`; the full `cargo test`/runtime link still requires the real MSVC toolchain. NOT TESTED ON WINDOWS for runtime test execution.
+
+---
+
 ## 4. Git workflow
 
 ### 4.1 Branching
@@ -385,7 +402,7 @@ Manual (frontend):
 - [x] switch theme (system/light/dark) and confirm colors update;
 - [x] verify no obvious layout overflow at 1024×640.
 
-> Rust gates: `cargo fmt --check` passes; `cargo clippy`/`cargo test` could **not** run here — the active GNU toolchain has a broken mingw linker and the MSVC target lacks `link.exe`. NOT TESTED ON WINDOWS. They run on a proper Windows + Visual C++ environment.
+> Rust gates: `cargo fmt --check` passes; `cargo check` + `cargo clippy -- -D warnings` pass with an SEH mingw-w64 linker (see §3b). Full `cargo test` runtime link still requires the MSVC toolchain — NOT TESTED ON WINDOWS.
 
 ### Commit
 

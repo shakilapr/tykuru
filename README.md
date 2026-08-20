@@ -32,6 +32,7 @@ v1 is under active implementation following [architecture.md](./architecture.md)
 - Windows 10 or 11 (primary target).
 - [Evergreen WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) runtime (installed by the bundled bootstrapper if missing).
 - To **build from source**: Rust toolchain + Node.js 20+ and pnpm.
+  - Backend link: use the MSVC target (`x86_64-pc-windows-msvc` with Visual Studio C++ Build Tools) or an SEH mingw-w64 (`x86_64-pc-windows-gnu`, e.g. WinLibs). The rustup self-contained GNU linker is too old to link this app.
 
 ## Build from source
 
