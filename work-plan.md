@@ -489,16 +489,15 @@ Implements: §3.1 (Typst authority), §11.1 (bundling), §11.2 (process launch),
 
 ### Implement
 
-- [ ] Pin Typst version in `config/versions.toml` (`version`, `target` triple, `checksum_sha256`).
-- [ ] `scripts/fetch_typst.ps1`: download official Typst release binary for `x86_64-pc-windows-msvc` into `src-tauri/binaries/typst-x86_64-pc-windows-msvc.exe`, verify SHA-256 against `versions.toml`, fail loudly on mismatch.
-- [ ] `scripts/verify_typst.ps1`: assert the sidecar exists and checksum matches; exit non-zero otherwise.
-- [ ] Tauri sidecar config in `tauri.conf.json` (`bundle.externalBin` includes the sidecar glob) so Tauri resolves `typst` at runtime.
-- [ ] `compiler/mod.rs`, `compiler/sidecar.rs`: `CompilerProcess` that builds the command via `tauri::api::process::Command::new_sidecar("typst")` (no shell). Arguments passed separately: `compile <entry> <candidate.pdf> --root <project_root>`.
-- [ ] Retain `tauri::process::CommandChild` handle inside `CompilerProcess`; expose `kill()`/`wait()`.
-- [ ] `compiler/mod.rs` `CompilerService` with `compile_once(session) -> Result<CompileOutcome>` where `CompileOutcome { success: bool, exit_status, stderr: String, candidate_path: PathBuf }`.
-- [ ] Candidate output path: `<cache_dir>/candidate.pdf`. Never write into the project directory.
-- [ ] Capture stderr/stdout via piped child; bound stderr buffer (e.g. last 64 KiB) to avoid unbounded memory.
-- [ ] Narrow Tauri permissions: no `shell`/`process` access from frontend; only backend uses sidecar API.
+- [x] Pin Typst version in `config/versions.toml` (`version = "0.15.1"`, `target` triple, `checksum_sha256`).
+- [x] `scripts/fetch_typst.ps1`: download official Typst release binary for `x86_64-pc-windows-msvc` into `src-tauri/binaries/typst-x86_64-pc-windows-msvc.exe`, verify SHA-256 against `versions.toml`, fail loudly on mismatch.
+- [x] `scripts/verify_typst.ps1`: assert the sidecar exists and checksum matches; exit non-zero otherwise.
+- [x] Tauri sidecar config in `tauri.conf.json` (`bundle.externalBin` includes the sidecar glob) so Tauri resolves `typst` at runtime; shell plugin scope restricts execution to the `typst` sidecar only.
+- [x] `compiler/mod.rs`, `compiler/sidecar.rs`: `CompilerProcess` that builds the command via `tauri_plugin_shell` `app.shell().sidecar("typst")` (no shell). Arguments passed separately: `compile <entry> <candidate.pdf> --root <project_root>`.
+- [x] `CompilerService::compile_once(session) -> Result<CompileOutcome>` where `CompileOutcome { success: bool, exit_code, stderr: String, candidate_path: PathBuf }`. (One-shot uses `.output()`; the watcher stage retains `CommandChild`.)
+- [x] Candidate output path: `<cache_dir>/candidate.pdf`. Never write into the project directory.
+- [x] Capture stdout/stderr via piped child; bound stderr buffer to last 64 KiB to avoid unbounded memory.
+- [x] Narrow Tauri permissions: no `shell`/`process` capability granted to the frontend (`shell:default` is intentionally omitted); only the backend uses the sidecar API.
 
 Pipeline:
 
@@ -514,35 +513,37 @@ candidate.pdf in cache
 
 ### Fixtures
 
-Create under `fixtures/` (committed, real Typst sources):
+Create under `fixtures/` (committed, real Typst sources; each verified against the pinned sidecar):
 
-- [ ] `fixtures/basic/main.typ` — headings, equations, a table.
-- [ ] `fixtures/imports/main.typ` + `fixtures/imports/part.typ` (import/include).
-- [ ] `fixtures/images/main.typ` + a small committed PNG/JPEG/SVG.
-- [ ] `fixtures/bibliography/main.typ` + `refs.bib`.
-- [ ] `fixtures/unicode/main.typ` — non-ASCII content.
-- [ ] `fixtures/errors/main.typ` — intentionally invalid Typst.
-- [ ] `fixtures/fonts/` — uses a system font only (no bundled font dependency).
+- [x] `fixtures/basic/main.typ` — headings, equations, a table.
+- [x] `fixtures/imports/main.typ` + `fixtures/imports/part.typ` (import/include).
+- [x] `fixtures/images/main.typ` + committed `logo.svg` (no external package dependency).
+- [x] `fixtures/bibliography/main.typ` + `refs.bib`.
+- [x] `fixtures/unicode/main.typ` — non-ASCII content.
+- [x] `fixtures/errors/main.typ` — intentionally invalid Typst.
+- [x] `fixtures/fonts/main.typ` — uses a system font only (no bundled font dependency).
 
 ### Integration tests (`cargo test`, real sidecar)
 
 Valid fixture (`fixtures/basic`):
 
-- [ ] Typst process exits success.
-- [ ] candidate exists at cache path.
-- [ ] candidate starts with `%PDF-`.
-- [ ] candidate size is non-trivial (> 1 KiB).
-- [ ] project directory receives no generated preview PDF (assert no `.pdf` written under `fixtures/basic`).
+- [x] Typst process exits success.
+- [x] candidate exists at cache path.
+- [x] candidate starts with `%PDF-`.
+- [x] candidate size is non-trivial (> 1 KiB).
+- [x] project directory receives no generated preview PDF (assert no `.pdf` written under `fixtures/basic`).
 
 Invalid fixture (`fixtures/errors`):
 
-- [ ] process returns failure.
-- [ ] bounded diagnostic captured in `stderr`.
-- [ ] Tykuru backend does not panic; returns structured `Err`.
+- [x] process returns failure.
+- [x] bounded diagnostic captured in `stderr`.
+- [x] Tykuru backend does not panic; returns structured `Err`.
 
 Also:
 
-- [ ] sidecar checksum verified by `scripts/verify_typst.ps1` in CI before compile tests run.
+- [x] sidecar checksum verified by `scripts/verify_typst.ps1` in CI before compile tests run.
+
+> The Rust integration tests above are **written** (`src-tauri/tests/compiler.rs`) but could not be executed here: the active GNU toolchain has a broken mingw linker and the MSVC target lacks `link.exe`, so `cargo check`/`test` fail at the link step. `cargo fmt --check` passes. NOT TESTED ON WINDOWS — they run on a proper Windows + Visual C++ build environment. The fixtures themselves were verified manually with the real sidecar (basic/imports/images/bibliography/unicode/fonts compile; errors fails with a diagnostic).
 
 ### Manual
 
@@ -557,6 +558,8 @@ feat(compiler): compile typ documents with bundled typst
 ### Exit gate
 
 Tykuru can compile representative Typst files with only its bundled compiler.
+
+> Rust integration tests NOT TESTED ON WINDOWS (linker unavailable). Fixtures verified manually against the sidecar. Frontend gates unaffected by this stage (no UI change required); `pnpm typecheck`/`lint`/`test`/`build` remain green.
 
 ---
 

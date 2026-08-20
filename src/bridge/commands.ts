@@ -21,3 +21,14 @@ export async function closeDocument(sessionId: string): Promise<void> {
 export async function getActiveSession(): Promise<SessionSummary | null> {
   return invoke<SessionSummary | null>("get_active_session");
 }
+
+export interface CompileOutcome {
+  success: boolean;
+  exitCode: number | null;
+  stderr: string;
+  candidatePath: string;
+}
+
+export async function compileDocument(sessionId: string): Promise<CompileOutcome> {
+  return invoke<CompileOutcome>("compile_document", { sessionId });
+}

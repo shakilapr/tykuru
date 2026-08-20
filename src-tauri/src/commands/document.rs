@@ -8,6 +8,7 @@ use serde::Serialize;
 use tauri::State;
 
 use crate::app_state::AppState;
+use crate::compiler::{CompileError, CompileOutcome};
 use crate::open_request::{OpenRequestError, OpenRequestRouter};
 use crate::session::{CloseError, SessionId};
 
@@ -31,6 +32,8 @@ pub struct OpenDocumentResult {
 pub enum CommandError {
     #[error(transparent)]
     OpenRequest(#[from] OpenRequestError),
+    #[error(transparent)]
+    Compiler(#[from] CompileError),
     #[error("no active session")]
     NoActiveSession,
     #[error("requested session is not the active session")]
@@ -44,6 +47,14 @@ pub enum CommandError {
 impl Serialize for CommandError {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl From<CompileError> for CommandError {
+    fn from(e: CompileError) -> Self {
+        // Surface the compiler diagnostic without leaking internals beyond the
+        // message; the frontend shows it as a controlled error.
+        CommandError::Compiler(e)
     }
 }
 
@@ -105,6 +116,20 @@ pub fn get_active_session(app: tauri::AppHandle) -> Result<Option<SessionSummary
         .lock()
         .map_err(|_| CommandError::LockPoisoned)?;
     Ok(manager.get_active().map(summarize))
+}
+
+/// Compiles the active session once with the bundled Typst sidecar.
+///
+/// Writes `candidate.pdf` into the session cache dir and returns the outcome,
+/// including any bounded diagnostic. The frontend must not call this with a
+/// stale `session_id`; the backend verifies the id matches the active session.
+#[tauri::command]
+pub fn compile_document(
+    session_id: String,
+    app: tauri::AppHandle,
+) -> Result<CompileOutcome, CommandError> {
+    let id = parse_session_id(&session_id)?;
+    crate::compiler::CompilerService::compile_once(&app, &id).map_err(CommandError::from)
 }
 
 /// Registers a validated entry path as a new active session.
