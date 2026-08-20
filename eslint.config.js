@@ -2,6 +2,9 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
+  {
+    ignores: ["dist/**", "src-tauri/**", "node_modules/**"],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -18,7 +21,6 @@ export default tseslint.config(
       },
     },
     files: ["**/*.{ts,tsx}"],
-    ignores: ["dist", "src-tauri", "node_modules"],
     rules: {
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
     },
