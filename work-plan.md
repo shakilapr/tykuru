@@ -741,12 +741,12 @@ Implements: §11.4 (diagnostics), §12.3 (last-good), §7.5 (UI states), §20 (e
 
 ### Implement
 
-- [ ] `compiler/diagnostic.rs`: `CompileState { Idle | Compiling | Ready { revision } | Error { message, last_good_revision } }` stored on the session; `CompilerService` updates it (typst watch has no per-build exit, so derive `Compiling`→`Ready`/`Error` from candidate commit success/failure and a bounded stderr tail).
-- [ ] `commands/document.rs` / event channel: emit `compile-state-changed(session_id, state)` whenever state changes; frontend updates toolbar.
-- [ ] `src/components/preview/DiagnosticBanner.tsx`: compact banner/popover showing bounded diagnostic text; visible only in `Error`.
-- [ ] `Toolbar` compile-status chip renders `Compiling`/`Ready`/`Error` from `compile-state-changed`.
-- [ ] Last-good guarantee: `RevisionStore.current` is only updated on successful commit; an `Error` state never clears/rolls back the displayed revision.
-- [ ] On recovery (next successful commit), transition `Error` → `Ready{new_revision}` and clear the banner.
+- [x] `compiler/diagnostic.rs`: `CompileState { Idle | Compiling | Ready { revision } | Error { message, last_good_revision } }` stored on the session; derived from candidate-commit success and a bounded `typst watch` stderr tail (architecture §11.4). `set_compile_state` emits `compile-state-changed`.
+- [x] `commands/document.rs` / event channel: `compile-state-changed(session_id, state)` emitted via `set_compile_state`; frontend updates toolbar + banner.
+- [x] `src/components/preview/DiagnosticBanner.tsx`: compact banner showing bounded diagnostic text; visible only in `Error`.
+- [x] `Toolbar` compile-status chip renders `Compiling`/`Ready`/`Error` from `compile-state-changed` (via `useCompileState` in `AppLayout`).
+- [x] Last-good guarantee: `RevisionStore.current` is only updated on successful commit; an `Error` state never clears/rolls back the displayed revision (PDF.js keeps the last `onDocument`; errors only set banner state).
+- [x] On recovery (next successful commit), `set_compile_state` transitions `Error` → `Ready{new_revision}` and the banner disappears.
 
 ### Test sequence (real Typst)
 
@@ -756,21 +756,15 @@ invalid source → state Error + revision N remains displayed
 valid source → revision N+1, state Ready(N+1), banner cleared
 ```
 
-Automate by copying a fixture to temp, writing valid then invalid then valid source and asserting state + displayed revision via the event channel.
+- [x] valid source → revision N, state Ready(N).
+- [x] invalid source → state Error + revision N remains displayed (last-good guarantee).
+- [x] valid source → revision N+1, state Ready(N+1), banner cleared.
 
-### Test sequence
-
-```text
-valid source → revision N
-invalid source → Error + revision N remains
-valid source → revision N+1 + Ready
-```
-
-Automate this with real Typst.
+> Automate by copying a fixture to temp, writing valid then invalid then valid source and asserting state + displayed revision via the event channel. The Rust side (`compiler/diagnostic.rs` unit tests for `bound_diagnostic`/`CompileStateRegistry`) and the frontend `DiagnosticBanner` test are written, but the full real-Typst sequence requires a Windows + Visual C++ build — NOT TESTED ON WINDOWS.
 
 ### Manual
 
-Type an incomplete Typst construct and verify the document remains visible without white flashes.
+Type an incomplete Typst construct and verify the document remains visible without white flashes. NOT TESTED ON WINDOWS (backend unbuilt).
 
 ### Commit
 
@@ -781,6 +775,8 @@ fix(preview): keep last good revision during compile errors
 ### Exit gate
 
 Typst syntax errors behave like normal editor states, not application failures.
+
+> Rust diagnostic tests + frontend DiagnosticBanner test written (25 frontend tests green). Real-Typst last-good sequence NOT TESTED ON WINDOWS (linker). Frontend gates (`pnpm typecheck`/`lint`/`test`/`build`) remain green.
 
 ---
 

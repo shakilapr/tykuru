@@ -12,3 +12,12 @@ export interface SessionSummary {
 export interface OpenDocumentResult {
   session: SessionSummary;
 }
+
+export type CompileStatus = "idle" | "compiling" | "ready" | "error";
+
+export interface CompileState {
+  status: CompileStatus;
+  revision?: number;
+  message?: string;
+  lastGoodRevision?: number | null;
+}

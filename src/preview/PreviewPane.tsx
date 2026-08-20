@@ -5,6 +5,8 @@ import { PreviewController } from "./preview-controller";
 import { PdfDocumentLike } from "./pdfjs";
 import { PdfViewer } from "./PdfViewer";
 import { DEFAULT_VIEW_STATE, resetZoom, ViewState, zoomIn, zoomOut } from "./view-state";
+import { useCompileState } from "./use-compile-state";
+import { DiagnosticBanner } from "@/components/preview/DiagnosticBanner";
 import { Button } from "@/components/ui/button";
 
 export function PreviewPane() {
@@ -13,6 +15,7 @@ export function PreviewPane() {
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
+  const compileState = useCompileState();
 
   const controllerRef = useRef<PreviewController | null>(null);
   if (!controllerRef.current) {
@@ -64,6 +67,7 @@ export function PreviewPane() {
           Reset
         </Button>
       </div>
+      <DiagnosticBanner state={compileState} />
       {error ? (
         <div role="alert" className="m-2 rounded-md border border-destructive bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}

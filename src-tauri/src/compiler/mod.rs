@@ -1,8 +1,10 @@
 //! Compiler subsystem: owns the bundled Typst sidecar lifecycle.
 
+pub mod diagnostic;
 pub mod manager;
 pub mod sidecar;
 
+pub use diagnostic::{bound_diagnostic, set_compile_state, CompileState};
 pub use manager::{CompilerError, CompilerManager};
 pub use sidecar::{compile_once, CompileError, CompileOutcome, CompilerProcess};
 

@@ -5,11 +5,12 @@
 //! plugin's sidecar API with arguments passed separately — never via a shell
 //! string, `cmd.exe`, `powershell`, or `sh` (architecture §11.2, §6.2.1).
 
+use std::io::Read;
 use std::path::PathBuf;
 
 use serde::Serialize;
 use tauri::Manager;
-use tauri_plugin_shell::process::CommandChild;
+use tauri_plugin_shell::process::{CommandChild, Stdio};
 use tauri_plugin_shell::ShellExt;
 
 /// Bounded diagnostic buffer so a chatty compiler cannot exhaust memory.
@@ -132,8 +133,47 @@ impl CompilerProcess {
                 "--root",
                 project_root.to_str().unwrap_or(""),
             ])
+            .stderr(Stdio::piped())
             .spawn()
             .map_err(CompileError::Spawn)?;
+
+        // `typst watch` has no per-build exit; derive compile state from its
+        // stderr. A line mentioning an error becomes an `Error` state (bounded
+        // diagnostic). Successful commits flip it back to `Ready` in the output
+        // watcher (architecture §11.4).
+        if let Some(mut stderr) = child.stderr() {
+            let diag_app = app.clone();
+            let diag_id = session_id.clone();
+            std::thread::spawn(move || {
+                let mut buf = Vec::new();
+                let mut byte = [0u8; 1];
+                loop {
+                    match stderr.read(&mut byte) {
+                        Ok(0) => break,
+                        Ok(_) => {
+                            buf.push(byte[0]);
+                            if byte[0] == b'\n' {
+                                let line = String::from_utf8_lossy(&buf).trim().to_string();
+                                buf.clear();
+                                if line.to_lowercase().contains("error") {
+                                    crate::compiler::diagnostic::set_compile_state(
+                                        &diag_app,
+                                        &diag_id,
+                                        crate::compiler::diagnostic::CompileState::Error {
+                                            message: crate::compiler::diagnostic::bound_diagnostic(
+                                                &line,
+                                            ),
+                                            last_good_revision: None,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+            });
+        }
 
         Ok(Self {
             session_id: session_id.clone(),

@@ -39,6 +39,11 @@ impl CompilerManager {
         }
         let proc = CompilerProcess::start_watch(app, session_id)?;
         *guard = Some(proc);
+        crate::compiler::diagnostic::set_compile_state(
+            app,
+            session_id,
+            crate::compiler::diagnostic::CompileState::Compiling,
+        );
         Ok(())
     }
 
