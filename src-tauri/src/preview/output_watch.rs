@@ -113,6 +113,16 @@ fn commit_once(app: &AppHandle, session_id: &SessionId, cache_dir: &Path, candid
     };
     if !looks_like_pdf(&bytes) {
         log::warn!("candidate rejected: not a valid PDF snapshot");
+        // Typst failed to produce a valid PDF (e.g. invalid source); keep the
+        // last-good revision displayed and surface an Error state.
+        crate::compiler::diagnostic::set_compile_state(
+            app,
+            session_id,
+            crate::compiler::diagnostic::CompileState::Error {
+                message: "Typst did not produce a valid PDF".to_string(),
+                last_good_revision: None,
+            },
+        );
         return;
     }
 
@@ -134,4 +144,12 @@ fn commit_once(app: &AppHandle, session_id: &SessionId, cache_dir: &Path, candid
         }
     };
     delivery::emit_preview_updated(app, session_id, revision.number);
+    // Successful commit ⇒ Ready with the new revision (last-good advances).
+    crate::compiler::diagnostic::set_compile_state(
+        app,
+        session_id,
+        crate::compiler::diagnostic::CompileState::Ready {
+            revision: revision.number,
+        },
+    );
 }
