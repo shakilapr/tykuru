@@ -80,6 +80,8 @@ start next stage
 
 Do not begin several future stages at once.
 
+If implementation appears to require departing from a frozen architecture decision (stack, protocol, delivery, process ownership, single-session model, etc.), follow the architecture change procedure in `architecture.md §29` before changing code: state the blocked requirement, reproduce, evaluate the smallest compatible fix, add tests, and obtain approval. Keep the architecture and this plan in sync.
+
 ---
 
 ## 4. Git workflow
@@ -248,7 +250,7 @@ Create a reproducible Tauri + React project with the approved frontend stack and
 
 ### Architecture refs
 
-Implements: §1, §4 (stack), §6 (repo layout + structure principles + coding standards), §19, §27 (git), §28 (CI).
+Implements: §1, §4 (stack + §4.1 disallowed deps + §4.2 Base UI), §6 (repo layout + §6.1 structure principles + §6.2 coding standards), §19, §21 (security foundation: minimal capabilities), §23 (logging via `tauri-plugin-log`), §27 (git), §28 (CI). Forward references for later stages: §8.3 (async/cancellation), §29 (change procedure, see §3).
 
 ### Backend scaffold
 
@@ -666,7 +668,7 @@ External editor saves update Tykuru automatically.
 
 ### Architecture refs
 
-Implements: §11.2 (process launch), §11.3 (why watch), §12.1b (notify), §8.2 (one watcher), §3.5 (lifecycle), §2 (non-goals: no second build system).
+Implements: §11.2 (process launch), §11.3 (why watch), §12.1b (notify), §8.2 (one watcher), §8.3 (async/cancellation: `SessionId` checks are correctness; optional `CancellationToken` only aids resource cleanup), §3.5 (lifecycle), §2 (non-goals: no second build system).
 
 ### Implement
 
@@ -676,6 +678,7 @@ Implements: §11.2 (process launch), §11.3 (why watch), §12.1b (notify), §8.2
 - [ ] The candidate watcher from Stage 4 already observes `candidate.pdf` changes; ensure it is reused (debounce + stable read + commit) so watch-mode output flows through the same `commit_candidate` path.
 - [ ] `ShutdownCoordinator` (`shutdown.rs`): on app exit, iterate active session, `stop()` watcher, await exit, then allow close. Add an explicit Windows acceptance test (manual for now, automated in Stage 17/20) that upgrade/reinstall/shutdown leaves no `typst.exe`.
 - [ ] Reject a second watcher for the same active session (assert invariant in `start`).
+- [ ] Where useful, scope watcher/output tasks with `tokio-util::CancellationToken` for orderly cleanup; correctness still relies on `SessionId` validation of every event, not on cancellation being instantaneous (§8.3).
 
 ### Critical tests
 
@@ -693,26 +696,7 @@ Also test:
 - [ ] starting a watch when one already exists for the session returns an error / no duplicate child.
 - [ ] rapid repeated saves coalesce; output watcher duplicate events do not publish corrupted revisions.
 - [ ] stale old session cannot publish after switching to a new file (old child killed before new publish).
-
-### Critical tests
-
-Integration test:
-
-1. Copy fixture to temp directory.
-2. Start Typst watch through the real service.
-3. Wait for revision 1.
-4. Modify `main.typ`.
-5. Assert revision increases.
-6. Modify an imported `.typ`.
-7. Assert revision increases again.
-8. Stop session.
-9. Assert child exits.
-
-Also test:
-
-- [ ] rapid repeated saves;
-- [ ] output watcher duplicate events do not publish corrupted revisions;
-- [ ] stale old session cannot publish after switching to new file.
+- [ ] `process lifecycle helpers` unit test: `stop()` triggers child kill + `wait()` and reports completion even on a slow/non-responsive child (timeout path); `CancellationToken` cancellation propagates without panicking.
 
 ### Manual
 
