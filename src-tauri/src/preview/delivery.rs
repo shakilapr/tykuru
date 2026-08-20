@@ -5,7 +5,7 @@
 //! returns its bytes as an `ArrayBuffer` (architecture §13). Unknown session or
 //! revision is rejected; resolution can never escape the session cache root.
 
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::app_state::AppState;
 use crate::session::SessionId;

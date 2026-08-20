@@ -2,20 +2,36 @@ import { useCallback } from "react";
 import { ThemeProvider, useAppState } from "@/app/app-state";
 import AppLayout from "@/app/AppLayout";
 import { StartScreen } from "@/components/StartScreen";
-import { openDocument, openDocumentDialog } from "@/bridge/commands";
+import { compileDocument, openDocument, openDocumentDialog } from "@/bridge/commands";
 
 function Root() {
   const { documentState, openingDocumentState, openDocumentState, errorDocumentState } = useAppState();
+
+  const afterOpen = useCallback(
+    async (sessionId: string) => {
+      // Stage 5 vertical: one-shot compile so the candidate watcher produces a
+      // committed revision. Stage 6 replaces this with `typst watch`.
+      try {
+        await compileDocument(sessionId);
+      } catch (e) {
+        errorDocumentState(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [openDocumentState, errorDocumentState],
+  );
 
   const openFromDialog = useCallback(async () => {
     openingDocumentState();
     try {
       const session = await openDocumentDialog();
-      if (session) openDocumentState(session.id, session.filename);
+      if (session) {
+        openDocumentState(session.id, session.filename);
+        void afterOpen(session.id);
+      }
     } catch (e) {
       errorDocumentState(e instanceof Error ? e.message : String(e));
     }
-  }, [openingDocumentState, openDocumentState, errorDocumentState]);
+  }, [openingDocumentState, openDocumentState, errorDocumentState, afterOpen]);
 
   const openFromPath = useCallback(
     async (path: string) => {
@@ -23,11 +39,12 @@ function Root() {
       try {
         const session = await openDocument(path);
         openDocumentState(session.id, session.filename);
+        void afterOpen(session.id);
       } catch (e) {
         errorDocumentState(e instanceof Error ? e.message : String(e));
       }
     },
-    [openingDocumentState, openDocumentState, errorDocumentState],
+    [openingDocumentState, openDocumentState, errorDocumentState, afterOpen],
   );
 
   if (documentState.kind === "open") {

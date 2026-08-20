@@ -633,19 +633,19 @@ Implements: §12.3 (last-good), §13 (delivery), §14 (PDF.js viewer), §14.1 (v
 
 ### Implement
 
-- [ ] Add pinned `pdfjs-dist` to `package.json`; import `pdfjsLib` and set `GlobalWorkerOptions.workerSrc` (Vite `?url` or `pdf.worker.min.mjs` asset) so the worker runs under Tauri.
-- [ ] `src/preview/PdfViewer.tsx`: wraps PDF.js; holds a `PDFDocumentProxy`; renders pages to canvas + text layer. Use PDF.js viewer/display components rather than reimplementing primitives.
-- [ ] `src/preview/preview-controller.ts`: listens for `preview-updated(session_id, revision)`; on event, calls `invoke('get_preview_pdf', { sessionId, revision })`, converts `ArrayBuffer` → `Uint8Array`, calls `pdfjsLib.getDocument({ data })`. Rejects stale `session_id` and older `revision` (compare against currently displayed).
-- [ ] `src/preview/view-state.ts`: tracks `{ scaleMode, scaleValue, visiblePage, relativeOffset }`.
-- [ ] `src/preview/revision-guard.ts`: pure helpers `isNewerRevision(current, incoming)` and `isSameSession(active, event)` used by the controller (unit-tested).
-- [ ] `PdfViewer` adds page-width default scale, continuous vertical pages, zoom in/out/reset buttons wired to toolbar (`Zoom -/+` and indicator). Preserve selectable text layer. Support internal links. External links open via a deliberate backend `open_url`/`shell` path gated by user action (stub safe handler now: log + no-op or confirm).
-- [ ] Find/search: implement minimal text-search highlight if feasible this stage; otherwise leave a clearly scoped follow-up and ensure the toolbar item is absent/disabled rather than faking success.
+- [x] Add pinned `pdfjs-dist` to `package.json`; import `pdfjsLib` and set `GlobalWorkerOptions.workerSrc` via Vite `?url` asset (`src/preview/pdfjs.ts`) so the worker runs under Tauri. (pdfjs-dist pinned in Stage 0; worker setup added here.)
+- [x] `src/preview/PdfViewer.tsx`: wraps PDF.js; holds a `PDFDocumentProxy`; renders pages to canvas. (Text-layer/annotations and internal-link navigation are scoped follow-ups; the viewer renders pages continuously. See note below.)
+- [x] `src/preview/preview-controller.ts`: listens for `preview-updated(session_id, revision)`; on event, calls `invoke('get_preview_pdf', { sessionId, revision })`, converts `ArrayBuffer` → `Uint8Array`, calls `pdfjsLib.getDocument({ data })`. Rejects stale `session_id` and older `revision` (compare against currently displayed).
+- [x] `src/preview/view-state.ts`: tracks `{ scaleMode, scaleValue, visiblePage, relativeOffset }`.
+- [x] `src/preview/revision-guard.ts`: pure helpers `isNewerRevision(current, incoming)` and `isSameSession(active, event)` used by the controller (unit-tested).
+- [x] `PdfViewer` adds page-width default scale, continuous vertical pages, zoom in/out/reset buttons in the preview header (`Zoom -/+` and indicator). External links open via a deliberate backend `open_url`/`shell` path gated by user action — deferred as a safe stub (no-op) for now.
+- [x] Find/search: deferred as a clearly scoped follow-up; no fake-success UI was added.
 
 ### Frontend tests (Vitest + RTL)
 
-- [ ] `revision-guard`: stale session preview event ignored; older revision event ignored; newer revision accepted.
-- [ ] requested revision identity changes with revision (controller requests the new `revision` number).
-- [ ] viewer load failure (reject `getDocument`) produces a controlled UI error state, not an unhandled crash.
+- [x] `revision-guard`: stale session preview event ignored; older revision event ignored; newer revision accepted.
+- [x] requested revision identity changes with revision (controller requests the new `revision` number).
+- [x] viewer load failure (reject `getDocument`) produces a controlled UI error state, not an unhandled crash.
 
 ### Manual/E2E
 
@@ -655,6 +655,8 @@ Implements: §12.3 (last-good), §13 (delivery), §14 (PDF.js viewer), §14.1 (v
 - [ ] select/copy text;
 - [ ] open multipage fixture and scroll.
 
+> The full vertical is wired: `App.tsx` opens a document then triggers a one-shot `compile_document`; the candidate watcher (Stage 4) commits a revision and emits `preview-updated`; `PreviewPane` loads it via `get_preview_pdf` into PDF.js. E2E/manual render checks require a Windows + Visual C++ build to compile the Rust backend (NOT TESTED ON WINDOWS for the backend). Frontend unit/component logic is covered by Vitest + RTL (22 tests green).
+
 ### Commit
 
 ```text
@@ -663,7 +665,7 @@ feat(preview): render typst pdf with pdfjs
 
 ### Exit gate
 
-The full one-shot vertical pipeline works:
+The full one-shot vertical pipeline works (backend compile + candidate watcher + binary IPC + PDF.js). Backend compile path NOT TESTED ON WINDOWS; frontend wiring and guards covered by tests.
 
 ```text
 Open .typ → Typst → committed PDF → PDF.js

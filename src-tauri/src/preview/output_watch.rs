@@ -14,7 +14,7 @@ use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 use tauri::{AppHandle, Manager};
 
 use super::delivery;
-use super::revisions::{looks_like_pdf, read_stable_candidate, RevisionError, RevisionRegistry};
+use super::revisions::{looks_like_pdf, read_stable_candidate, RevisionError};
 use crate::app_state::AppState;
 use crate::session::SessionId;
 
