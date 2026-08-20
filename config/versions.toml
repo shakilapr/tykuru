@@ -1,0 +1,8 @@
+# Pinned external tool versions for Tykuru.
+# The actual sidecar is fetched/verified by scripts/fetch_typst.ps1.
+# Values are empty until the Typst bundling stage populates them.
+
+[typst]
+version = ""
+target = "x86_64-pc-windows-msvc"
+checksum_sha256 = ""
