@@ -51,6 +51,12 @@ export function PreviewPane() {
   const onZoomOut = useCallback(() => setViewState((s) => zoomOut(s)), []);
   const onReset = useCallback(() => setViewState((s) => resetZoom(s)), []);
 
+  const onScrollChange = useCallback(
+    (pos: Pick<ViewState, "visiblePage" | "relativeOffset">) =>
+      setViewState((s) => ({ ...s, ...pos })),
+    [],
+  );
+
   return (
     <div className="flex h-full w-full flex-col">
       <div className="flex h-9 items-center gap-1 border-b border-border px-2">
@@ -74,7 +80,7 @@ export function PreviewPane() {
         </div>
       ) : null}
       <div ref={containerRef} className="min-h-0 flex-1">
-        <PdfViewer doc={doc} viewState={viewState} containerWidth={width} />
+        <PdfViewer doc={doc} viewState={viewState} containerWidth={width} onScrollChange={onScrollChange} />
       </div>
     </div>
   );

@@ -44,8 +44,11 @@ export class PreviewController {
   private async doLoad(event: PreviewEvent): Promise<void> {
     try {
       const data = await getPreviewPdf(event.sessionId, event.revision);
-      // Re-check identity: a newer event may have arrived while we were fetching.
-      if (!isNewerRevision(this.displayed, event) && this.displayed.sessionId !== event.sessionId) {
+      // Re-check identity after the fetch: a newer revision (or a session
+      // switch) may have been displayed while we were loading. `isNewerRevision`
+      // is false when `displayed` already holds an equal-or-newer revision of
+      // the same session, so a stale in-flight load is discarded on arrival.
+      if (!isNewerRevision(this.displayed, event)) {
         return;
       }
       const doc = await loadPdf(data);

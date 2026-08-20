@@ -91,4 +91,36 @@ describe("PreviewController", () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(getPreviewPdf).toHaveBeenCalledWith("a", 6);
   });
+
+  it("discards a stale async load that finishes after a newer revision", async () => {
+    const onDocument = vi.fn();
+    const onError = vi.fn();
+    const controller = new PreviewController({ onDocument, onError });
+
+    let resolveA!: () => void;
+    let resolveB!: () => void;
+    const gateA = new Promise<void>((r) => (resolveA = r));
+    const gateB = new Promise<void>((r) => (resolveB = r));
+
+    // Revision 4 loads slowly; revision 5 loads and finishes first.
+    vi.mocked(getPreviewPdf)
+      .mockReturnValueOnce(Promise.resolve(gateA).then(() => new ArrayBuffer(8)) as never)
+      .mockReturnValueOnce(Promise.resolve(gateB).then(() => new ArrayBuffer(8)) as never);
+    vi.mocked(loadPdf).mockResolvedValue(fakeDoc() as never);
+
+    controller.applyEvent({ sessionId: "a", revision: 4 });
+    controller.applyEvent({ sessionId: "a", revision: 5 });
+
+    // Revision 5 completes → displayed.
+    resolveB();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(onDocument).toHaveBeenCalledTimes(1);
+    expect(onDocument.mock.calls[0]?.[1]?.revision).toBe(5);
+
+    // Revision 4 completes later → must not replace revision 5.
+    resolveA();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(onDocument).toHaveBeenCalledTimes(1);
+    expect(onDocument.mock.calls[0]?.[1]?.revision).toBe(5);
+  });
 });
