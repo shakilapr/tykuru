@@ -1,29 +1,30 @@
-#!/usr/bin/env pwsh
-# Verify the bundled official Typst sidecar is present and matches the pinned
-# checksum from config/versions.toml. Fails loudly; never reports success when
-# the sidecar is missing or mismatched.
+# Verifies the bundled Typst sidecar exists and matches the pinned checksum.
+# Exits non-zero on any failure so CI can block compile tests before they run.
 
 $ErrorActionPreference = "Stop"
 
-$root = Resolve-Path "$PSScriptRoot/.."
-$versions = Join-Path $root "config/versions.toml"
-$sidecar = Join-Path $root "src-tauri/binaries/typst-x86_64-pc-windows-msvc.exe"
+$root = Resolve-Path (Join-Path $PSScriptRoot "..")
+$versionsPath = Join-Path $root "config/versions.toml"
+$sidecarPath = Join-Path $root "src-tauri/binaries/typst-x86_64-pc-windows-msvc.exe"
 
-if (-not (Test-Path $sidecar)) {
-    Write-Error "Typst sidecar not found at $sidecar. Run scripts/fetch_typst.ps1 first."
+if (-not (Test-Path $sidecarPath)) {
+    Write-Error "Sidecar missing: $sidecarPath. Run scripts/fetch_typst.ps1 first."
     exit 1
 }
 
-# Checksum verification is enforced once a version is pinned in versions.toml.
-$content = Get-Content $versions -Raw
-if ($content -match 'checksum_sha256\s*=\s*"([0-9a-fA-F]{64})"') {
-    $expected = $Matches[1]
-    $actual = (Get-FileHash -Algorithm SHA256 -Path $sidecar).Hash.ToLower()
-    if ($actual -ne $expected) {
-        Write-Error "Typst sidecar checksum mismatch. Expected $expected, got $actual."
-        exit 1
-    }
-    Write-Host "Typst sidecar verified ($actual)."
+$toml = Get-Content $versionsPath -Raw
+if ($toml -match "(?m)^\s*checksum_sha256\s*=\s*`"?([^`"\r\n]+)`"?") {
+    $expected = $Matches[1].Trim()
 } else {
-    Write-Host "Typst sidecar present; checksum not yet pinned (skipping verification)."
+    Write-Error "checksum_sha256 not found in $versionsPath"
+    exit 1
 }
+
+$actual = (Get-FileHash -Algorithm SHA256 $sidecarPath).Hash
+if ($actual -ne $expected) {
+    Write-Error "Checksum mismatch!`n  expected: $expected`n  actual:   $actual"
+    exit 1
+}
+
+Write-Host "Sidecar verified: $sidecarPath ($actual)"
+exit 0

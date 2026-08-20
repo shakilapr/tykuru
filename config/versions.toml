@@ -1,8 +1,9 @@
 # Pinned external tool versions for Tykuru.
 # The actual sidecar is fetched/verified by scripts/fetch_typst.ps1.
-# Values are empty until the Typst bundling stage populates them.
+# The checksum below is the SHA-256 of the extracted typst.exe from the
+# official GitHub release asset for the pinned version.
 
 [typst]
-version = ""
+version = "0.15.1"
 target = "x86_64-pc-windows-msvc"
-checksum_sha256 = ""
+checksum_sha256 = "081217A463ADB006F8894B44227FE4B9C9E91FC85F5463D5948E8370DB9BB31E"

@@ -42,5 +42,14 @@
       }
     }
   },
-  "plugins": {}
+  "plugins": {
+    "shell": {
+      "sidecar": [
+        {
+          "bin": "typst",
+          "args": true
+        }
+      ]
+    }
+  }
 }
