@@ -802,26 +802,26 @@ relativeOffsetWithinPage  // fraction 0..1 of scroll position inside the visible
 
 On `preview-updated(session_id, revision)`:
 
-- [ ] keep old PDF visible until the new load is ready (don't blank/remount).
-- [ ] reject old `session_id` loads via `revision-guard.isSameSession`.
-- [ ] reject older `PreviewRevision` completions via `revision-guard.isNewerRevision`.
-- [ ] restore `page`, `offset`, `zoom` after the new document loads.
-- [ ] clamp `visiblePage` to the new document's page count if pagination shrank.
-- [ ] avoid stealing editor focus (manage focus so preview load doesn't move focus to the viewer).
+- [x] keep old PDF visible until the new load is ready (don't blank/remount).
+- [x] reject old `session_id` loads via `revision-guard.isSameSession`.
+- [x] reject older `PreviewRevision` completions via `revision-guard.isNewerRevision`.
+- [x] restore `page`, `offset`, `zoom` after the new document loads.
+- [x] clamp `visiblePage` to the new document's page count if pagination shrank.
+- [x] avoid stealing editor focus (manage focus so preview load doesn't move focus to the viewer).
 
 Implementation detail: `preview-controller.ts` maintains an in-flight load token; when a newer revision arrives mid-load, the older load result is discarded on arrival.
 
 ### Unit tests (Vitest)
 
-- [ ] `computeRelativeOffset(scrollTop, pageTop, pageHeight)` returns clamped 0..1.
-- [ ] `clampPage(target, pageCount)` clamps to `[1, pageCount]`.
-- [ ] page-width restoration maps `scaleMode: 'page-width'` correctly.
-- [ ] numeric zoom restoration maps `scaleValue` correctly.
-- [ ] stale async load cannot replace newer: simulate load A started, load B started+finished, then A finished → displayed stays B.
+- [x] `computeRelativeOffset(scrollTop, pageTop, pageHeight)` returns clamped 0..1.
+- [x] `clampPage(target, pageCount)` clamps to `[1, pageCount]`.
+- [x] page-width restoration maps `scaleMode: 'page-width'` correctly.
+- [x] numeric zoom restoration maps `scaleValue` correctly.
+- [x] stale async load cannot replace newer: simulate load A started, load B started+finished, then A finished → displayed stays B.
 
 ### Manual
 
-- [ ] open 10+ page fixture;
+- [ ] open 10+ page fixture (backend unbuilt here; covered by the E2E `live-preview`/`error-recovery` scenarios on Windows);
 - [ ] move to page 7;
 - [ ] edit content near beginning externally;
 - [ ] verify preview remains approximately at page 7.
@@ -835,6 +835,8 @@ feat(preview): preserve viewport across live revisions
 ### Exit gate
 
 Normal edits feel like the current document changed instead of a whole new viewer reopening.
+
+> Frontend gates (`pnpm typecheck`/`lint`/`test`/`build`) pass with 37 tests green, including the stale-async-load race regression and the view-state helpers. Manual multipage scroll-restore requires a Windows + Visual C++ backend build — NOT TESTED ON WINDOWS.
 
 ---
 
@@ -1196,20 +1198,34 @@ uncached package requiring network
 
 Ensure these fixtures exist and are checked in (Stage 3 created the base set; add the rest here):
 
-- [ ] `fixtures/multipage/main.typ` — 12+ pages of varied content (to exercise viewport preservation and scrolling).
-- [ ] `fixtures/large/main.typ` — a sizable document (many pages / repeated content) used for the `fixtures/large` performance benchmark referenced in §13 (deferred custom protocol decision).
-- [ ] `fixtures/fonts/main.typ` — uses a system font explicitly.
+- [x] `fixtures/multipage/main.typ` — 12+ pages of varied content (to exercise viewport preservation and scrolling). Verified against the pinned sidecar (12 pages).
+- [x] `fixtures/large/main.typ` — a sizable document (many pages / repeated content) used for the `fixtures/large` performance benchmark referenced in §13 (deferred custom protocol decision). Verified against the pinned sidecar (20 pages, ~430 KB).
+- [x] `fixtures/fonts/main.typ` — uses a system font explicitly.
 - [ ] A runtime temp-path test (not committed) for Unicode source paths.
 
 ### Integration harness
 
 Add a Rust integration test (`tests/integration/`) that, for each fully-local fixture, copies it to a temp dir, starts the real `CompilerService` watch, asserts a revision is published, and (where applicable) asserts the revision PDF is non-trivial and starts with `%PDF-`. Run via `pnpm typst:fixtures`.
 
+> A runnable sidecar-level harness already exists: `scripts/verify_fixtures.ps1` compiles every fully-local fixture (basic, imports, images, bibliography, unicode, fonts, multipage, large) against the pinned sidecar, asserts a `%PDF-` signature and non-trivial size, and asserts the `errors` fixture fails with a diagnostic. Wired as `pnpm typst:fixtures` — all 9 pass. The Rust integration test (driving the real `CompilerService` watch) remains pending a Windows + Visual C++ build — NOT TESTED ON WINDOWS.
+
 ### Commit
 
 ```text
 test(typst): add representative compatibility fixture suite
 ```
+
+> Fixtures + `verify_fixtures.ps1` + `benchmark_large.ps1` committed in `410ef72`.
+
+### Performance decision gate (architecture §13, §25, Stage 20)
+
+`scripts/benchmark_large.ps1` (`pnpm perf:large`) measures fixtures/large Typst compile time and PDF size. Measured on this machine (real sidecar, 5 runs):
+
+```text
+avg compile: 0.43s   avg size: 429,861 bytes (20 pages)
+```
+
+Average size is far below the 10 MB heuristic, so raw binary IPC remains appropriate; the range-capable `PDFDataRangeTransport` protocol stays deferred until in-app measurement contradicts this. `pnpm perf:large` is the reproducible baseline.
 
 ### Exit gate
 
@@ -1501,7 +1517,7 @@ Measure independently (use `fixtures/large`):
 ```text
 app startup
 open request → Typst process start
-Typst compile/watch latency
+Typst compile/watch latency      → pnpm perf:large (baseline measured: ~0.43 s for fixtures/large)
 candidate → committed revision latency
 revision event → PDF visible latency
 idle CPU

@@ -46,6 +46,7 @@ Other commands:
 ```text
 pnpm verify           # typecheck + lint + test + build + cargo fmt/clippy/test
 pnpm typst:fixtures   # run real-Typst integration fixtures
+pnpm perf:large       # large-fixture preview benchmark (perf decision gate)
 pnpm test:e2e         # desktop E2E (requires a Windows runner)
 ```
 

@@ -862,7 +862,7 @@ Security requirements:
 - no browser URL caching of preview content;
 - no arbitrary filesystem exposure or traversal.
 
-A custom range-capable protocol (`PDFDataRangeTransport`) is deferred until a `fixtures/large` benchmark demonstrates a real transfer/overhead problem. The boundary stays identity-addressed, never path-addressed.
+A custom range-capable protocol (`PDFDataRangeTransport`) is deferred until a `fixtures/large` benchmark demonstrates a real transfer/overhead problem. The boundary stays identity-addressed, never path-addressed. The reproducible baseline is `pnpm perf:large` (`scripts/benchmark_large.ps1`); on this project's reference machine the 20-page `fixtures/large` compiles in ~0.43 s to ~430 KB, well under the heuristic threshold. Only an in-app measurement showing a real transfer/memory problem (architecture §25, work-plan Stage 20) justifies revisiting this decision.
 
 ---
 
