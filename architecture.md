@@ -2,253 +2,324 @@
 
 **Repository:** `tykuru`  
 **Product:** Tykuru  
-**Document status:** implementation baseline  
-**Target:** Windows-first desktop application  
-**Primary file type:** `.typ`  
-**Architecture date:** 2026-08-20
+**Document:** `architecture.md`  
+**Status:** v1 implementation baseline  
+**Primary target:** Windows 11, with Windows 10 support where practical  
+**Primary document type:** Typst `.typ`  
+**Architecture style:** thin desktop shell around the official Typst compiler
 
 ---
 
 ## 1. Product definition
 
-Tykuru is a small, local-first desktop application for opening, previewing, and optionally editing Typst documents.
+Tykuru is a local-first Windows desktop application for opening, previewing, and optionally editing Typst documents.
 
-The primary experience is deliberately narrow:
+The core user workflow is intentionally small:
 
-1. Open a `.typ` file.
-2. Render it with the real Typst compiler.
-3. Display the resulting document immediately.
-4. Keep watching the document and its Typst dependencies.
-5. Refresh the preview whenever the source changes.
-6. Keep the preview usable when the source temporarily contains an error.
-7. Optionally reveal a lightweight editing pane for quick edits.
-8. Run as a normal Windows application and support opening `.typ` files from Explorer / **Open with** / double-click after association is selected.
+```text
+Open .typ
+   ↓
+Official Typst compiler
+   ↓
+PDF
+   ↓
+Live preview
+```
 
-Tykuru is **not** intended to become a replacement compiler or a large IDE. Typst remains the language/compiler authority; Tykuru is the desktop session, preview, and lightweight editing layer around it.
+The user may edit the source in any external editor. Tykuru watches the compiler output and refreshes automatically when Typst recompiles the document.
+
+Tykuru also provides a collapsible lightweight editor for quick edits:
+
+```text
+┌───────────────────────────────┬─────────────────────────────────────┐
+│ optional editor               │ live Typst preview                  │
+│                               │                                     │
+│ CodeMirror 6                  │ PDF.js                              │
+│                               │                                     │
+└───────────────────────────────┴─────────────────────────────────────┘
+```
+
+The editor is an optional convenience. Tykuru is not intended to become a full IDE.
+
+### 1.1 Required v1 behavior
+
+A completed v1 must be able to:
+
+1. Launch as a normal Windows desktop application.
+2. Open a `.typ` file from inside Tykuru.
+3. Accept a `.typ` path passed to `tykuru.exe`.
+4. Register Tykuru as an available Windows handler for `.typ` files.
+5. Support **Open with → Tykuru**.
+6. Support double-click opening when the user chooses Tykuru as the association.
+7. Render using the bundled official Typst compiler.
+8. Refresh automatically when the source or a Typst dependency changes.
+9. Preserve the last valid preview when the document temporarily fails to compile.
+10. Preserve useful preview position and zoom across refreshes.
+11. Show/hide a collapsible built-in editor.
+12. Save editor changes to the same `.typ` file on disk.
+13. Avoid silently overwriting changes made by an external editor.
+14. Exit without leaving orphan `typst.exe` processes.
+15. Install and run on a clean Windows machine without requiring a global Typst installation.
 
 ---
 
-## 2. Architecture principles
+## 2. Non-goals for v1
 
-### 2.1 One authoritative compiler
+The following are explicitly outside the v1 architecture unless later approved:
 
-Tykuru must not implement a Typst parser, evaluator, layout engine, package resolver, font engine, bibliography engine, or renderer.
+- replacing Typst's compiler;
+- implementing a Typst parser/evaluator/layout engine;
+- implementing a second Typst compiler in WASM;
+- full IDE/LSP functionality;
+- integrated terminal;
+- Git UI;
+- package manager UI;
+- multi-document tabs;
+- multi-window document ownership;
+- collaborative editing;
+- cloud document storage;
+- user accounts;
+- telemetry/analytics;
+- document database;
+- custom PDF renderer;
+- local HTTP server;
+- Electron.
 
-The bundled official Typst CLI is the compilation authority.
-
-This gives Tykuru the same language behavior as the selected Typst release for:
-
-- Typst markup and scripting
-- equations and math
-- imports and includes
-- local images and SVG
-- bibliography/citations
-- fonts
-- packages
-- templates
-- multi-file documents
-- layout and pagination
-- PDF generation
-
-### 2.2 One authoritative source file
-
-The document on disk is the canonical source.
-
-Both workflows use the same file:
-
-```text
-External editor ─┐
-                 ├──> project/main.typ ──> Typst
-Tykuru editor ───┘
-```
-
-Tykuru must not create a hidden second document model whose contents can diverge from the actual `.typ` file.
-
-### 2.3 Preview-first UX
-
-The preview is the main product surface. The editor is optional and collapsible.
-
-Default layout:
-
-```text
-┌──────────────────────────────────────────────────────────────┐
-│ Tykuru · main.typ                         100%   −  +   ⋯   │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│                        PDF preview                           │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
-```
-
-Split mode:
-
-```text
-┌────────────────────────┬─────────────────────────────────────┐
-│                        │                                     │
-│ lightweight editor     │             preview                 │
-│                        │                                     │
-│                   ◀    │                                     │
-└────────────────────────┴─────────────────────────────────────┘
-```
-
-### 2.4 Last good preview always wins
-
-A syntax error while typing must not blank the application.
-
-If compilation fails:
-
-- keep the most recent successful preview visible;
-- change status to `Error`;
-- expose the current compiler diagnostic;
-- replace the preview only after a later successful compilation.
-
-### 2.5 Small dependency surface
-
-Avoid adding infrastructure unless it solves a real product requirement.
-
-No database, local HTTP server, Electron runtime, React application, custom compiler, package manager, or background service is required for v1.
-
-### 2.6 Windows is the release gate
-
-The internal design should remain portable, but v1 is complete only when a normal Windows user can:
-
-- install Tykuru;
-- launch it from Start / desktop normally;
-- choose a `.typ` file in the app;
-- drag a `.typ` file onto the app;
-- choose Tykuru from **Open with**;
-- double-click an associated `.typ` file;
-- edit the document and see live preview updates.
+These can be reconsidered after v1 only if a real requirement justifies them.
 
 ---
 
-## 3. Recommended technology stack
+## 3. Architecture principles
 
-| Area | Decision | Reason |
+### 3.1 Typst is the language authority
+
+The official Typst CLI is the only Typst implementation in Tykuru.
+
+Tykuru must not duplicate:
+
+- parsing;
+- evaluation;
+- layout;
+- package resolution;
+- bibliography logic;
+- font discovery;
+- image decoding rules;
+- dependency tracking;
+- PDF generation.
+
+This is the main compatibility strategy. If a document works in the bundled Typst CLI under the same root/font/package conditions, Tykuru should not deliberately alter its semantics.
+
+### 3.2 Disk is the source of truth
+
+The `.typ` file on disk is canonical.
+
+```text
+External editor ──────┐
+                      ├──> main.typ on disk ──> Typst
+Tykuru CodeMirror ────┘
+```
+
+The built-in editor may contain temporary unsaved state, but Tykuru does not maintain a second persistent document representation.
+
+### 3.3 Preview-first UI
+
+The default mode is preview-only.
+
+The editor can be expanded only when needed.
+
+### 3.4 Last-good-preview continuity
+
+Compilation failure is a normal editing state.
+
+The previous valid PDF remains visible until a newer valid PDF is committed.
+
+### 3.5 Backend owns privileged operations
+
+The React frontend does not receive arbitrary filesystem or process access.
+
+Rust owns:
+
+- file opening;
+- source reads/writes;
+- path validation;
+- Typst process lifecycle;
+- cache ownership;
+- preview publication;
+- Windows command-line/open handling;
+- project root selection;
+- settings persistence.
+
+### 3.6 Small, explicit frontend
+
+React is used to keep component behavior and UI composition predictable.
+
+React does not imply a large web application architecture. Avoid routers, server state frameworks, global stores, and other infrastructure unless there is a demonstrated need.
+
+### 3.7 Windows is the final acceptance platform
+
+Cross-platform-friendly implementation is preferred, but a feature affecting process spawning, file opening, packaging, file associations, path handling, or WebView behavior is not release-complete until verified on Windows.
+
+---
+
+## 4. Approved technology stack
+
+| Layer | Technology | Role |
 |---|---|---|
-| Desktop runtime | Tauri 2 | Small native shell, Rust backend, system WebView |
-| Backend | Rust | Process lifecycle, filesystem, cache, file-open handling |
-| Frontend | TypeScript + HTML + CSS | UI is small; framework not required |
-| Build frontend | Vite | Fast simple TypeScript build/dev server |
-| Typst engine | Official Typst CLI as bundled Tauri sidecar | Exact compiler behavior without reimplementing Typst |
-| Preview format | PDF | Typst default output; vector text/document semantics |
-| PDF renderer | `pdfjs-dist` / PDF.js viewer components | Mature page rendering, selection, search, links |
-| Optional editor | CodeMirror 6 | Lightweight, modular, future extensibility |
-| File notifications needed by Tykuru | Rust `notify` crate | Detect preview-output and entry-file changes |
-| Native open dialog | Tauri dialog plugin | Native Windows file selection |
-| Single-instance behavior | Tauri single-instance plugin | Route later Explorer launches to existing Tykuru window |
-| Persistent small settings | Tauri store plugin or one small JSON config | Recent files, layout, project-root overrides |
-| Windows installer | NSIS first; MSI optional | Normal installable `.exe`; Tauri supports both |
+| Desktop shell | Tauri 2 | Native desktop runtime and packaging |
+| Backend | Rust | Process, filesystem, sessions, cache, Windows integration |
+| Frontend framework | React | UI composition and stateful components |
+| Language | TypeScript | Typed frontend implementation |
+| Frontend build | Vite | Development/build pipeline |
+| Styling | Tailwind CSS | Consistent utility-based styling |
+| UI primitives | shadcn/ui | Reusable accessible UI components |
+| Icons | Lucide React | One consistent icon family |
+| Editor | CodeMirror 6 | Lightweight optional source editor |
+| Typst engine | Official Typst CLI sidecar | Compilation and watch mode |
+| Preview format | PDF | Native Typst output |
+| Preview engine | PDF.js / `pdfjs-dist` | Document rendering, text, links, search |
+| Native file dialog | Tauri dialog plugin | Open `.typ` / choose project root |
+| Single instance | Tauri single-instance plugin | Route later launches to existing app |
+| Filesystem notifications | Rust `notify` | Observe candidate PDF and editor source state |
+| Settings | Small local JSON/Tauri store | UI state, recent files, root overrides |
+| Unit tests | Vitest + Rust tests | Frontend/backend logic |
+| UI tests | React Testing Library where useful | Component behavior |
+| Desktop E2E | Tauri-supported WebDriver/WebdriverIO path | Windows application flows |
+| Installer | Tauri NSIS | Primary Windows installer |
 
-### Version policy
+### 4.1 Dependencies intentionally not approved
 
-Do not depend on `latest` at build time.
+Do not add another equivalent stack without explicit architecture approval:
 
-Pin:
+- Material UI;
+- Chakra;
+- Ant Design;
+- Bootstrap;
+- another CSS framework;
+- another icon family;
+- Redux/Zustand by default;
+- React Router by default;
+- a second PDF renderer;
+- a second Typst implementation.
 
-- an exact Tauri 2 release in Cargo/npm lockfiles;
-- an exact PDF.js version;
-- an exact CodeMirror dependency set;
-- an exact official Typst binary version.
+---
 
-At the time this architecture was written, Typst documentation/repository reports version **0.15.1**. The repository should still express the compiler version in one machine-readable location so upgrades are deliberate.
-
-Example:
+## 5. High-level architecture
 
 ```text
-config/versions.toml
+                WINDOWS / USER ENVIRONMENT
 
-typst = "0.15.1"
+ Explorer / Open With       External Editor
+          │                      │
+          │ .typ path            │ saves files
+          ▼                      ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                         TYKURU / TAURI 2                            │
+│                                                                     │
+│  ┌──────────────────────── RUST BACKEND ─────────────────────────┐  │
+│  │                                                               │  │
+│  │ OpenRequestRouter                                             │  │
+│  │       │                                                       │  │
+│  │       ▼                                                       │  │
+│  │ SessionManager                                                │  │
+│  │       │                                                       │  │
+│  │       ├── SourceService                                       │  │
+│  │       ├── ProjectRootService                                  │  │
+│  │       ├── CompilerService ────────┐                           │  │
+│  │       ├── PreviewRevisionStore    │                           │  │
+│  │       ├── DiagnosticState         │                           │  │
+│  │       ├── SettingsStore           │                           │  │
+│  │       └── ShutdownCoordinator     │                           │  │
+│  │                                   │                           │  │
+│  └───────────────────────────────────│───────────────────────────┘  │
+│                                      │                              │
+│                                      ▼                              │
+│                         bundled official Typst CLI                  │
+│                                      │                              │
+│                         typst watch entry.typ candidate.pdf         │
+│                                      │                              │
+│                                      ▼                              │
+│                             candidate PDF                           │
+│                                      │                              │
+│                           verify + commit revision                  │
+│                                      │                              │
+│                                      ▼                              │
+│  ┌────────────────────── REACT WEBVIEW FRONTEND ─────────────────┐ │
+│  │                                                                │ │
+│  │ App                                                            │ │
+│  │ ├── Toolbar / status                                           │ │
+│  │ ├── Resizable split layout                                     │ │
+│  │ ├── CodeMirror editor (optional)                               │ │
+│  │ ├── diagnostics                                                │ │
+│  │ └── PDF.js preview                                             │ │
+│  │                                                                │ │
+│  └────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 4. High-level system
-
-```text
-                         WINDOWS / FILESYSTEM
-
-  Explorer / Open With       External editor        Tykuru editor
-          │                       │                     │
-          │ .typ path             │ save                │ autosave
-          ▼                       ▼                     ▼
-┌───────────────────────────────────────────────────────────────────┐
-│                         TYKURU (TAURI)                            │
-│                                                                   │
-│  ┌────────────────────── RUST BACKEND ─────────────────────────┐  │
-│  │                                                             │  │
-│  │ OpenRequestRouter ──> SessionManager                         │  │
-│  │                          │                                  │  │
-│  │                          ├─ SourceService                    │  │
-│  │                          ├─ CompilerService ─────────────┐    │  │
-│  │                          ├─ PreviewRevisionStore         │    │  │
-│  │                          ├─ DiagnosticState              │    │  │
-│  │                          └─ Settings                     │    │  │
-│  │                                                       │    │  │
-│  └───────────────────────────────────────────────────────│────┘  │
-│                                                          │       │
-│                               official Typst sidecar      │       │
-│                           `typst watch entry output.pdf`  │       │
-│                                      │                   │       │
-│                                      ▼                   │       │
-│                                candidate PDF ─────────────┘       │
-│                                      │                           │
-│                                      ▼                           │
-│                         committed preview revision               │
-│                                      │                           │
-│  ┌────────────────────── WEBVIEW FRONTEND ────────────────────┐  │
-│  │                                                            │  │
-│  │ App shell + toolbar                                        │  │
-│  │     ├─ optional CodeMirror editor                          │  │
-│  │     └─ PDF.js PreviewController                            │  │
-│  │                                                            │  │
-│  └────────────────────────────────────────────────────────────┘  │
-└───────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 5. Repository layout
-
-Recommended initial structure:
+## 6. Repository layout
 
 ```text
 tykuru/
+├─ AGENTS.md
 ├─ README.md
 ├─ architecture.md
 ├─ work-plan.md
 ├─ LICENSE
+├─ .editorconfig
+├─ .gitignore
 ├─ package.json
 ├─ pnpm-lock.yaml
 ├─ tsconfig.json
 ├─ vite.config.ts
+├─ components.json                 # shadcn configuration
+├─ config/
+│  └─ versions.toml                # pinned Typst/tool versions
 │
 ├─ src/
-│  ├─ index.html
-│  ├─ main.ts
-│  ├─ app.ts
-│  ├─ styles/
-│  │  ├─ app.css
-│  │  ├─ editor.css
-│  │  └─ preview.css
-│  ├─ ui/
-│  │  ├─ toolbar.ts
-│  │  ├─ status.ts
-│  │  ├─ start-screen.ts
-│  │  └─ split-pane.ts
+│  ├─ main.tsx
+│  ├─ app/
+│  │  ├─ App.tsx
+│  │  ├─ AppLayout.tsx
+│  │  └─ app-state.ts
+│  │
+│  ├─ components/
+│  │  ├─ ui/                       # shadcn-owned/copied primitives
+│  │  ├─ toolbar/
+│  │  │  └─ Toolbar.tsx
+│  │  ├─ editor/
+│  │  │  ├─ EditorPane.tsx
+│  │  │  ├─ TypstEditor.tsx
+│  │  │  └─ SaveStatus.tsx
+│  │  ├─ preview/
+│  │  │  ├─ PreviewPane.tsx
+│  │  │  ├─ PdfViewer.tsx
+│  │  │  ├─ PreviewToolbar.tsx
+│  │  │  └─ DiagnosticBanner.tsx
+│  │  └─ layout/
+│  │     └─ WorkspaceSplit.tsx
+│  │
+│  ├─ bridge/
+│  │  ├─ commands.ts
+│  │  ├─ events.ts
+│  │  └─ types.ts
+│  │
+│  ├─ editor/
+│  │  ├─ autosave.ts
+│  │  ├─ source-sync.ts
+│  │  └─ editor-state.ts
+│  │
 │  ├─ preview/
 │  │  ├─ preview-controller.ts
-│  │  ├─ pdf-viewer.ts
 │  │  ├─ view-state.ts
-│  │  └─ find-controller.ts
-│  ├─ editor/
-│  │  ├─ editor-controller.ts
-│  │  ├─ autosave.ts
-│  │  └─ source-sync.ts
-│  └─ bridge/
-│     ├─ commands.ts
-│     ├─ events.ts
-│     └─ types.ts
+│  │  └─ revision-guard.ts
+│  │
+│  ├─ hooks/
+│  ├─ lib/
+│  │  └─ utils.ts                  # shadcn utility helper
+│  └─ styles/
+│     └─ globals.css               # Tailwind + theme tokens + integrations
 │
 ├─ src-tauri/
 │  ├─ Cargo.toml
@@ -257,47 +328,58 @@ tykuru/
 │  ├─ tauri.conf.json
 │  ├─ capabilities/
 │  │  └─ default.json
-│  ├─ icons/
 │  ├─ binaries/
 │  │  └─ typst-<target-triple>[.exe]
+│  ├─ icons/
 │  └─ src/
 │     ├─ main.rs
+│     ├─ lib.rs
 │     ├─ app_state.rs
 │     ├─ open_request.rs
+│     ├─ shutdown.rs
+│     │
 │     ├─ session/
 │     │  ├─ mod.rs
 │     │  ├─ manager.rs
 │     │  ├─ model.rs
 │     │  └─ root.rs
+│     │
 │     ├─ compiler/
 │     │  ├─ mod.rs
 │     │  ├─ sidecar.rs
 │     │  ├─ output_watch.rs
 │     │  └─ diagnostic.rs
+│     │
+│     ├─ preview/
+│     │  ├─ mod.rs
+│     │  ├─ revisions.rs
+│     │  └─ protocol.rs
+│     │
 │     ├─ source/
 │     │  ├─ mod.rs
 │     │  ├─ read.rs
 │     │  ├─ write.rs
 │     │  └─ external_watch.rs
-│     ├─ preview/
+│     │
+│     ├─ settings/
 │     │  ├─ mod.rs
-│     │  ├─ revisions.rs
-│     │  └─ protocol.rs
-│     ├─ commands/
-│     │  ├─ mod.rs
-│     │  ├─ document.rs
-│     │  ├─ editor.rs
-│     │  └─ settings.rs
-│     └─ shutdown.rs
+│     │  └─ store.rs
+│     │
+│     └─ commands/
+│        ├─ mod.rs
+│        ├─ document.rs
+│        ├─ editor.rs
+│        └─ settings.rs
 │
 ├─ fixtures/
 │  ├─ basic/
 │  ├─ imports/
-│  ├─ bibliography/
 │  ├─ images/
-│  ├─ errors/
+│  ├─ bibliography/
 │  ├─ unicode/
 │  ├─ multipage/
+│  ├─ errors/
+│  ├─ fonts/
 │  └─ large/
 │
 ├─ tests/
@@ -305,21 +387,121 @@ tykuru/
 │  ├─ integration/
 │  └─ e2e/
 │
+├─ scripts/
+│  ├─ fetch_typst.ps1
+│  ├─ verify_typst.ps1
+│  ├─ verify.ps1
+│  └─ build_windows.ps1
+│
 └─ .github/
    └─ workflows/
       ├─ verify.yml
       └─ windows-release.yml
 ```
 
-Avoid creating every file on day one. The structure defines boundaries; implementation can grow into it stage by stage.
+Do not create every leaf file immediately. The tree defines ownership boundaries.
 
 ---
 
-## 6. Core runtime model
+## 7. Frontend architecture
 
-### 6.1 One active document in v1
+### 7.1 React responsibilities
 
-Keep v1 intentionally simple: one window and one active Typst entry document.
+React owns presentation and local UI state only.
+
+Examples:
+
+- toolbar visibility;
+- editor collapsed/expanded;
+- split ratio;
+- PDF zoom controls;
+- diagnostic expansion;
+- transient save indicator;
+- focus behavior.
+
+React does not own the authoritative document/session/process state.
+
+### 7.2 shadcn/ui policy
+
+Use shadcn/ui for common primitives instead of inventing parallel components.
+
+Initial useful primitives:
+
+- `Button`;
+- `Tooltip`;
+- `DropdownMenu`;
+- `Dialog`;
+- `Separator`;
+- `ResizablePanelGroup` / equivalent;
+- `ScrollArea` where appropriate;
+- `Popover`;
+- `Command` only if a command palette is later justified;
+- `Select`, `Switch`, `Input` for settings as needed.
+
+Do not import components in bulk. Add only components currently used.
+
+### 7.3 Tailwind policy
+
+Use Tailwind for layout, spacing, typography, responsive behavior, and semantic theme tokens.
+
+Prefer:
+
+```text
+bg-background
+text-foreground
+border-border
+text-muted-foreground
+bg-muted
+text-destructive
+```
+
+Avoid component-local hard-coded colors unless representing something that cannot reasonably use the theme system.
+
+### 7.4 Themes
+
+Support at least:
+
+- system;
+- light;
+- dark.
+
+Theme implementation should use CSS variables/design tokens so PDF.js and CodeMirror integration can adapt without separate duplicated palettes.
+
+### 7.5 Frontend state model
+
+Use a small explicit state model.
+
+Conceptual example:
+
+```ts
+type CompileUiState =
+  | { kind: "idle" }
+  | { kind: "compiling" }
+  | { kind: "ready"; revision: number }
+  | { kind: "error"; message: string; lastGoodRevision?: number };
+
+type DocumentUiState =
+  | { kind: "empty" }
+  | { kind: "opening"; name?: string }
+  | {
+      kind: "open";
+      sessionId: string;
+      filename: string;
+      compile: CompileUiState;
+    };
+```
+
+Avoid a global state library until state complexity demonstrates that React state/context is insufficient.
+
+---
+
+## 8. Rust backend architecture
+
+### 8.1 Core model
+
+v1 supports one active document.
+
+Conceptually:
 
 ```rust
 struct DocumentSession {
@@ -328,53 +510,52 @@ struct DocumentSession {
     project_root: PathBuf,
     cache_dir: PathBuf,
     compiler: Option<CompilerProcess>,
-    preview_revision: u64,
+    current_preview: Option<PreviewRevision>,
     compile_state: CompileState,
-    diagnostics: Vec<Diagnostic>,
     editor_state: EditorFileState,
 }
 ```
 
-Opening another `.typ` replaces the current session after its child compiler/watchers are shut down.
-
-Multi-tab/multi-window support is a later feature and must not complicate v1.
-
-### 6.2 Session state machine
+Use domain-specific wrapper types where useful:
 
 ```text
-NoDocument
-    │ open .typ
-    ▼
-Opening
-    │
-    ├─ invalid/unreadable ──> OpenFailed ──> NoDocument
-    │
-    ▼
-StartingCompiler
-    │
-    ├─ startup failure ─────> CompilerUnavailable
-    │
-    ▼
-Compiling
-    │
-    ├─ valid PDF ───────────> Ready
-    │                           │
-    │                           │ source/dependency change
-    │                           ▼
-    │                        Compiling
-    │
-    └─ compile error ───────> ErrorWithLastGoodPreview
-                                │
-                                └─ next success ──> Ready
+SessionId
+PreviewRevision
+DiskRevision
+SourceSnapshot
 ```
 
-The `ErrorWithLastGoodPreview` state is an explicit product state, not an exceptional crash path.
+### 8.2 One active session invariant
+
+```text
+active sessions <= 1
+Typst watcher for active session <= 1
+Typst processes after app shutdown = 0
+```
+
+Opening another `.typ` cleanly tears down the previous session before the new session becomes authoritative.
+
+### 8.3 Async ownership
+
+Every session-specific asynchronous event must carry the `SessionId`.
+
+This includes:
+
+- compiler output events;
+- candidate PDF events;
+- source watch events;
+- frontend preview updates;
+- save operations where relevant.
+
+A stale event from an old session must be rejected.
 
 ---
 
-## 7. Opening `.typ` files
+## 9. Opening `.typ` files
 
-Tykuru must normalize all ways of requesting a file into one internal message:
+All entry points normalize into one backend request.
+
+Conceptually:
 
 ```rust
 enum OpenRequest {
@@ -382,960 +563,906 @@ enum OpenRequest {
 }
 ```
 
-Sources of an `OpenRequest`:
+Supported sources:
 
-1. **File > Open** / startup button using native dialog.
-2. Drag-and-drop onto the main window.
-3. Command-line invocation:
-   ```text
-   tykuru.exe C:\work\paper\main.typ
-   ```
-4. Windows file association / Explorer **Open with**.
-5. Second invocation while Tykuru is already running, forwarded by the single-instance callback.
+1. Start-screen **Open .typ** button.
+2. File/Open command.
+3. Drag and drop.
+4. `tykuru.exe path.typ`.
+5. Windows **Open with**.
+6. Associated double-click.
+7. Second application launch forwarded into the running instance.
 
-### 7.1 Validation
+### 9.1 Path validation
 
-Before creating a session:
+Before opening:
 
-- canonicalize the path when possible;
-- require a regular readable file;
-- normally require case-insensitive extension `.typ`;
-- preserve Unicode paths;
-- do not concatenate the path into a shell command;
-- pass arguments directly to the sidecar process API.
+- require a readable regular file;
+- normally require extension `.typ`, case-insensitive on Windows;
+- preserve Unicode;
+- support spaces and parentheses;
+- canonicalize when practical;
+- never pass a path through shell string interpolation;
+- do not accept arbitrary URL schemes as document paths.
 
-### 7.2 Windows file association
+### 9.2 Single-instance behavior
 
-The Windows bundle declares a Tauri file association similar to:
+Use Tauri's single-instance plugin.
 
-```json
-{
-  "bundle": {
-    "fileAssociations": [
-      {
-        "ext": ["typ"],
-        "name": "Typst Document",
-        "description": "Typst document"
-      }
-    ]
-  }
-}
+The first instance owns the window.
+
+Later launches:
+
+```text
+Explorer opens second.typ
+        ↓
+second Tykuru process starts
+        ↓
+single-instance callback forwards argv
+        ↓
+first process parses OpenRequest
+        ↓
+first window restores/focuses
+        ↓
+second.typ replaces current active session
 ```
 
-Tykuru should initially register as an available handler. Do not forcibly take over another default association without user choice.
+The first process must also parse its own initial startup arguments.
 
-### 7.3 Single instance
+### 9.3 Windows association
 
-Use Tauri's single-instance plugin and register it before other plugins as required by the plugin documentation.
+Declare `.typ` as a supported file association in Tauri bundle configuration.
 
-Behavior:
-
-- first process owns the main window;
-- a second Explorer/Open-With launch forwards its `argv` and working directory;
-- the first process parses the `.typ` path;
-- focus/restore the main window;
-- open that document in the current instance.
-
-The first launch must also parse `std::env::args()` because the initial process receives file-association paths directly through command-line arguments on Windows.
+Tykuru must not silently force itself as the default handler. Windows/user choice remains authoritative.
 
 ---
 
-## 8. Project root rules
-
-Typst's project root controls which paths may be accessed relative to a document and how imports resolve.
-
-### v1 rule
+## 10. Project root
 
 Default:
 
 ```text
-project_root = parent(entry_path)
+project_root = parent(entry.typ)
 ```
 
-This handles the common project:
+This correctly supports the common structure:
 
 ```text
 paper/
 ├─ main.typ
 ├─ template.typ
 ├─ refs.bib
-└─ figures/
+└─ images/
 ```
 
-### Root override
+Provide an optional **Set Project Root…** action for documents that intentionally import outside the entry file's directory.
 
-Provide a small advanced command:
+Do not infer a universal Typst project root from `typst.toml`.
 
-```text
-Document > Set Project Root…
-```
+When root changes:
 
-Persist override keyed by canonical entry path.
-
-Compiler invocation can then include:
-
-```text
---root <selected-root>
-```
-
-Validation:
-
-- root must exist and be a directory;
-- entry file must be inside the root for the normal case;
-- store canonicalized path;
-- if the root later disappears, fall back only after informing the user.
-
-Do not infer a generic root solely from `typst.toml`; Typst does not use it as a universal project marker for arbitrary documents.
+1. validate/canonicalize root;
+2. ensure it is a directory;
+3. update stored override;
+4. restart the compiler session;
+5. retain last-good preview until new compile succeeds.
 
 ---
 
-## 9. Typst compiler subsystem
+## 11. Typst compiler subsystem
 
-### 9.1 Bundled sidecar
+### 11.1 Bundling
 
-Bundle an official Typst executable with Tauri's `externalBin` mechanism.
+Ship an official Typst executable as a Tauri sidecar.
 
-Windows target example:
+Example Windows path:
 
 ```text
 src-tauri/binaries/typst-x86_64-pc-windows-msvc.exe
 ```
 
-The end user therefore does not need to install Typst separately.
+The exact version is pinned in one machine-readable location such as:
 
-### 9.2 Compiler launch
+```text
+config/versions.toml
+```
+
+Do not silently update the compiler at runtime.
+
+### 11.2 Process launch
 
 Conceptual command:
 
 ```text
-typst watch <entry.typ> <session-cache>/candidate.pdf \
-  --root <project-root>
+typst watch <entry.typ> <session-cache>/candidate.pdf --root <project-root>
 ```
 
-Additional options are added only when the corresponding setting exists, for example custom font paths.
+Rules:
 
-Important rules:
-
-- spawn without invoking `cmd.exe`/PowerShell;
+- launch the binary directly, never through `cmd.exe` or PowerShell;
+- pass arguments separately;
 - retain the child handle;
-- capture stdout and stderr;
-- kill the child when the session changes or app exits;
-- never start two watchers for the same active session;
-- ignore late events tagged with an old `SessionId`.
+- capture stderr/stdout;
+- terminate the old child before replacing the session;
+- terminate child on shutdown;
+- do not allow two watcher children for one active session.
 
-### 9.3 Why `typst watch`
+### 11.3 Why `typst watch`
 
-Typst already performs incremental compilation and its CLI explicitly supports watching and automatically recompiling source/dependency changes. Tykuru should use this rather than recreating the compiler dependency graph itself.
+Typst already owns dependency tracking and incremental compilation. Tykuru should not rebuild that system.
 
-### 9.4 Compiler process model
+Changes to imported `.typ`, `.bib`, images, templates, or other compiler dependencies should be handled through Typst's own watcher/compiler behavior.
 
-```rust
-struct CompilerProcess {
-    session_id: SessionId,
-    child: CommandChild,
-    candidate_pdf: PathBuf,
-    started_at: Instant,
-}
+### 11.4 Diagnostics
+
+v1 may expose compiler stderr as a bounded diagnostic message without relying on fragile detailed parsing.
+
+A later version can add richer location parsing if there is a stable machine-readable format worth depending on.
+
+UI states:
+
+```text
+Compiling
+Ready
+Error
 ```
 
-### 9.5 Diagnostics
-
-Do not make v1 depend on a brittle parser for the exact human-readable compiler text.
-
-Capture stderr into a bounded rolling buffer and surface:
-
-```rust
-struct Diagnostic {
-    severity: DiagnosticSeverity,
-    text: String,
-}
-```
-
-A later version may parse stable machine-readable diagnostics if/when the chosen Typst CLI exposes a format Tykuru can confidently rely on.
-
-The UI initially needs only:
-
-- `Compiling…`
-- `Ready`
-- `Error`
-- expandable raw compiler message
-
-### 9.6 Compiler upgrade policy
-
-Upgrading the bundled Typst compiler is a deliberate release event:
-
-1. change pinned version;
-2. download official binaries for supported targets;
-3. verify checksums/signatures according to release process;
-4. run the full Typst fixture suite;
-5. note compiler change in Tykuru release notes.
-
-Do not silently download a different compiler at runtime in v1.
+Error does not imply preview deletion.
 
 ---
 
-## 10. Preview revision pipeline
+## 12. Preview publication pipeline
 
-Never point PDF.js at a file that Typst may be rewriting at that exact moment.
+PDF.js must never read a PDF while Typst may still be replacing it.
 
-Use two levels:
+Use a candidate + immutable revision design.
 
 ```text
-Typst writer
-    │
-    ▼
+Typst
+  ↓
 candidate.pdf
-    │ verify/read complete snapshot
-    ▼
-revision-000042.pdf  <── immutable while PDF.js reads it
+  ↓
+verify readable completed snapshot
+  ↓
+revision-000001.pdf
+revision-000002.pdf
+revision-000003.pdf
+  ↓
+PDF.js loads committed revision only
 ```
 
-### 10.1 Candidate output watcher
+### 12.1 Candidate verification
 
-Tykuru watches only its own session cache output for preview publication purposes. This is **not** a replacement for Typst's source dependency watcher.
+On candidate change:
 
-On an event for `candidate.pdf`:
+1. confirm event belongs to active `SessionId`;
+2. wait/retry a short bounded period for a stable readable file;
+3. require non-zero length;
+4. verify `%PDF-` signature;
+5. create a new immutable revision;
+6. atomically mark it current;
+7. emit `preview-updated(sessionId, revision)`;
+8. safely garbage-collect old revisions.
 
-1. verify event belongs to the current session;
-2. wait/retry briefly until a stable read succeeds;
-3. require non-zero content and a PDF signature;
-4. optionally make a lightweight end-of-file sanity check;
-5. copy/read into a new immutable revision;
-6. atomically update `current_revision` in backend state;
-7. emit `preview-updated` with revision number;
-8. retain only a small number of previous revisions.
+### 12.2 Revision ordering
 
-This prevents PDF.js from racing a half-written output.
+Preview revisions are monotonically increasing per session.
 
-### 10.2 Revision retention
+Frontend must reject:
 
-Keep at most:
+- old sessions;
+- older revision numbers;
+- a PDF load that completes after a newer revision is already displayed.
 
-- current revision;
-- previous revision;
-- optionally one older revision while an asynchronous viewer load is still completing.
+Example race:
 
-Delete stale revisions after the frontend confirms it has switched or after a short safe grace period.
+```text
+revision 4 load starts
+revision 5 load starts
+revision 5 finishes
+revision 4 finishes later
+```
 
-### 10.3 Serving previews to the WebView
+Revision 4 must not replace revision 5.
 
-Recommended approach: a Tauri custom URI protocol backed by the Rust preview store.
+### 12.3 Last-good preview
+
+If compilation fails, no new revision is published.
+
+The last committed PDF stays visible.
+
+---
+
+## 13. Preview delivery to WebView
+
+Do not expose arbitrary filesystem paths to the frontend.
+
+Use a constrained preview protocol or another Tauri-approved asset mechanism addressed by identity, not path.
 
 Conceptual URL:
 
 ```text
-tykuru-preview://localhost/session/<id>/revision/<n>.pdf
+tykuru-preview://localhost/session/<session-id>/revision/<n>.pdf
 ```
 
-The protocol handler must **not** map arbitrary user-provided paths to the filesystem. It receives a session/revision identifier, looks that identifier up in backend state, and serves only a known committed preview file.
+The Rust handler resolves the identity to an internally known revision file.
 
-Response headers:
+Security requirements:
 
-```text
-Content-Type: application/pdf
-Cache-Control: no-store
-```
-
-Revision-specific URLs also naturally avoid stale WebView/PDF.js caching.
-
-Security requirement: reject unknown session/revision IDs and path traversal syntax before touching disk.
-
-### 10.4 Preview update event
-
-Rust → frontend event:
-
-```ts
-type PreviewUpdated = {
-  sessionId: string;
-  revision: number;
-  url: string;
-};
-```
-
-Frontend discards the event if `sessionId !== activeSessionId`.
+- reject unknown session;
+- reject unknown revision;
+- reject traversal;
+- never accept an arbitrary source path from the URL;
+- return PDF content type;
+- avoid stale browser caching.
 
 ---
 
-## 11. PDF.js frontend
+## 14. PDF.js viewer architecture
 
-Use `pdfjs-dist` viewer components rather than embedding the entire stock Firefox-style viewer.
+The viewer should remain minimal.
 
-Required v1 capabilities:
+v1 features:
 
-- continuous page layout;
-- page-width default zoom;
-- manual zoom +/-;
-- mouse-wheel/trackpad scrolling;
-- text selection and copy;
-- clickable PDF links;
-- find (`Ctrl+F`);
-- page number status;
-- preserve visual position across preview revisions.
+- vertical continuous pages;
+- page-width default;
+- zoom in/out/reset;
+- text selection;
+- copy;
+- internal links;
+- safe handling of external links;
+- find/search;
+- page number awareness;
+- view-state restoration.
 
-Optional later capabilities:
+### 14.1 View-state preservation
 
-- outline/sidebar;
-- thumbnails;
-- presentation mode;
-- print button;
-- export/open generated PDF.
-
-### 11.1 Viewer state
-
-```ts
-type ViewState = {
-  scaleMode: 'page-width' | 'custom';
-  scale: number;
-  pageNumber: number;
-  pageFraction: number;
-};
-```
-
-Before switching PDF revision:
-
-1. sample current visible page and relative vertical position;
-2. load new revision;
-3. wait for pages initialization;
-4. restore zoom;
-5. restore page and approximate fraction.
-
-If the document layout changed drastically, clamping to the nearest valid page is acceptable.
-
-### 11.2 No flash-to-empty
-
-The old `PDFDocumentProxy` remains active until the new document has loaded sufficiently to replace it.
-
-Flow:
+Track:
 
 ```text
-old preview visible
-       │
-       ├── load new PDF in background
-       │
-       ├── success -> swap -> destroy old document
-       │
-       └── failure -> keep old -> report preview-load error
+scale mode/value
+visible page
+relative vertical offset inside page
 ```
+
+On a newer PDF:
+
+1. keep old preview visible;
+2. begin loading new PDF;
+3. confirm load still corresponds to newest revision/session;
+4. swap preview;
+5. restore approximate page/offset/zoom;
+6. do not steal editor focus.
 
 ---
 
-## 12. Optional built-in editor
+## 15. Built-in editor architecture
 
-### 12.1 Role
+Use CodeMirror 6.
 
-The editor is a convenience pane, not the core architecture.
+The editor is not a second application core. It is a view/controller for the active disk file.
 
-Use CodeMirror 6 because it is modular and can remain small.
+### 15.1 Initial editor scope
 
-Required v1 editor features:
-
-- load the active `.typ` file;
-- plain UTF-8 editing;
-- undo/redo;
+- UTF-8 text;
 - line numbers;
-- bracket/quote conveniences where practical;
-- find/replace if inexpensive;
-- `Ctrl+S` immediate save;
-- autosave after a short idle debounce;
-- visible save state;
-- collapsible/resizable split pane.
+- undo/redo;
+- basic bracket/quote behavior;
+- find/replace where inexpensive;
+- Ctrl+S;
+- autosave;
+- saved/saving/conflict state;
+- collapsible/resizable pane.
 
-Not required for v1:
+Do not block v1 on LSP/completion.
 
-- LSP;
-- completion;
-- hover docs;
-- goto definition;
-- refactoring;
-- project file tree;
-- embedded terminal;
-- custom Typst parser.
-
-### 12.2 Do not add a second Typst engine
-
-Avoid a CodeMirror package that brings its own WASM Typst compiler merely to support the editor. Tykuru already owns an official native Typst sidecar. Duplicating compiler implementations increases binary size, version skew, testing burden, and package/font behavior differences.
-
-Syntax highlighting can initially be basic or added later through a grammar that does not become a second compiler.
-
-### 12.3 Autosave
-
-Recommended default:
+### 15.2 Save path
 
 ```text
-editor change
-   │
-   ├─ mark LocalPending
-   │
-   └─ 200–300 ms idle debounce
-              │
-              ▼
-        Rust save_source
-              │
-              ▼
-          disk .typ
-              │
-              ▼
-          typst watch
+CodeMirror transaction
+       ↓
+frontend dirty state
+       ↓
+200–300 ms debounce
+       ↓
+save_source(sessionId, text, expectedDiskRevision)
+       ↓
+Rust validates session and disk revision
+       ↓
+write active entry file
+       ↓
+Typst watch recompiles
+       ↓
+new preview revision
 ```
 
-Keep debounce configurable internally, but do not expose tuning settings in v1 unless users need them.
+The frontend must not receive an unrestricted `write_file(path, contents)` command.
 
-### 12.4 Safe write behavior
+### 15.3 Self-write detection
 
-The Rust source service owns writes.
-
-Before writing:
-
-- ensure the session is still active;
-- ensure path equals the current entry file;
-- check the external revision metadata/hash supplied by the editor;
-- write UTF-8 via a tested safe-write abstraction;
-- on failure, retain the editor buffer and show `Unsaved`.
-
-Do not let JavaScript request arbitrary filesystem writes.
+Rust tracks enough information about Tykuru's own successful writes to avoid treating the corresponding filesystem notification as a surprising external edit.
 
 ---
 
-## 13. External-editor synchronization
+## 16. External editor synchronization
 
-Typst itself watches dependency files for compilation. Tykuru additionally needs to notice changes to the **entry file** so the optional editor does not display stale text.
+Tykuru must coexist with VS Code, Zed, Neovim, etc.
 
-Maintain:
-
-```rust
-struct EditorFileState {
-    disk_revision: u64,
-    disk_hash: ContentHash,
-    last_self_write_hash: Option<ContentHash>,
-}
-```
-
-### External change while editor has no pending local change
+State model:
 
 ```text
-external editor saves main.typ
-        │
-        ▼
-SourceService detects entry-file change
-        │
-        ▼
-read + hash
-        │
-        ▼
-emit source-reloaded
-        │
-        ▼
-CodeMirror replaces content while preserving cursor when possible
-```
-
-### External change during local pending edit
-
-Do not overwrite user text.
-
-State becomes `Conflict`:
-
-```text
-File changed outside Tykuru.
-[Reload external] [Keep my version]
-```
-
-While conflict is unresolved, pause automatic writes.
-
-This case should be rare because autosave debounce is short, but handling it prevents silent data loss.
-
----
-
-## 14. Frontend/backend contract
-
-Keep Tauri IPC small and typed.
-
-### Commands
-
-```text
-open_document_dialog() -> OpenResult
-open_document(path) -> SessionSnapshot
-close_document() -> void
-get_active_session() -> SessionSnapshot?
-read_source() -> SourceSnapshot
-save_source(text, expectedDiskRevision) -> SaveResult
-set_project_root(path?) -> SessionSnapshot
-set_editor_visible(bool) -> void
-```
-
-Most file-open handling from Windows should enter through Rust directly rather than routing untrusted `argv` through the frontend.
-
-### Events
-
-```text
-session-opened
-session-closed
-compile-state-changed
-preview-updated
-source-reloaded
-source-conflict
-fatal-session-error
-```
-
-Every session-specific event contains `sessionId`.
-
-### Frontend must not
-
-- spawn Typst;
-- resolve project paths;
-- read arbitrary filesystem locations;
-- write arbitrary filesystem locations;
-- manage Windows file associations;
-- decide whether compiler output is committed.
-
----
-
-## 15. Settings and persistent state
-
-Persist only small user preferences:
-
-```json
-{
-  "window": {
-    "editorVisible": false,
-    "splitRatio": 0.36
-  },
-  "preview": {
-    "defaultScale": "page-width"
-  },
-  "recentFiles": [],
-  "rootOverrides": {},
-  "fontPaths": []
-}
-```
-
-Do not store document contents in the settings store.
-
-Recent-file entries that no longer exist should be removable without error.
-
-For v1, cap recent files, e.g. 10.
-
----
-
-## 16. Cache layout
-
-Use Tauri/OS application cache/data directories rather than writing generated PDFs next to source documents.
-
-Conceptual Windows layout:
-
-```text
-%LOCALAPPDATA%/Tykuru/
-├─ cache/
-│  └─ sessions/
-│     └─ <session-id>/
-│        ├─ candidate.pdf
-│        ├─ revision-000001.pdf
-│        └─ revision-000002.pdf
-└─ config/
-   └─ settings.json
-```
-
-At application start:
-
-- remove abandoned old session cache directories according to age policy;
-- never delete outside Tykuru's own cache root.
-
-At clean session close:
-
-- terminate Typst;
-- release viewer references;
-- delete session cache.
-
----
-
-## 17. Fonts and packages
-
-### Fonts
-
-Default to Typst's own normal system font discovery.
-
-Advanced setting may add custom font paths passed to Typst using the CLI's supported font-path mechanism.
-
-Tykuru should not inventory or render fonts itself.
-
-### Packages
-
-Let the official compiler implement package lookup/download/cache behavior.
-
-Consequences:
-
-- a project that imports an uncached online package may require network access on first use;
-- already cached packages can be reused according to Typst behavior;
-- Tykuru itself does not implement a package registry client in v1.
-
-Status/error text should make compiler network/package errors visible rather than converting them into generic “preview failed.”
-
----
-
-## 18. Security model
-
-Tykuru opens user-authored Typst projects, so boundaries should be explicit.
-
-### Required controls
-
-1. **No shell string construction** — sidecar receives an argument array.
-2. **Narrow Tauri capabilities** — expose only commands/plugins required by the main window.
-3. **No general filesystem IPC** from the frontend.
-4. **Preview custom protocol uses IDs**, never arbitrary file paths.
-5. **CSP** should allow bundled app resources, PDF worker resources, and the Tykuru preview scheme only as needed.
-6. **External URL navigation** is not silently allowed inside the app; PDF links that navigate outside should use a deliberate opener policy.
-7. **Cache cleanup is root-scoped** and cannot traverse upward.
-8. **Sidecar version is pinned** and obtained through the project's release process.
-9. **Untrusted `.typ` paths are canonicalized/validated** before session setup.
-10. **Compiler process is killed on session/app exit** to avoid orphan watchers.
-
-Tykuru should not claim to sandbox Typst beyond what the bundled compiler and configured project root actually enforce.
-
----
-
-## 19. Performance targets
-
-These are engineering targets, not guarantees for arbitrarily complex Typst documents.
-
-### v1 targets on a normal Windows development machine
-
-| Metric | Target |
-|---|---:|
-| Application idle CPU with stable document | approximately 0% / negligible |
-| UI reaction to open request | < 100 ms before loading state visible |
-| Preview swap overhead after completed compilation | < 150 ms for ordinary documents |
-| Editor autosave debounce | 200–300 ms |
-| Viewer keeps scroll/zoom across revisions | 100% for ordinary same-layout edits |
-| Orphan Typst process after closing document | 0 |
-| Generated PDF files written into user project | 0 |
-
-Measure compiler time separately from Tykuru overhead.
-
-### Large-document behavior
-
-PDF.js should render pages lazily through its viewer mechanisms. Do not rasterize an entire large document in Rust or preload every page into custom image elements.
-
----
-
-## 20. Failure handling
-
-| Failure | Required behavior |
-|---|---|
-| Source file missing | close/disable session with clear message; do not crash |
-| Source permission denied | show open/read error |
-| Typst sidecar missing/corrupt | show fatal compiler setup error |
-| Typst syntax error | keep last good preview + compiler error |
-| Imported file missing | same as compile error |
-| Package download unavailable | show compiler diagnostic |
-| Candidate PDF partially readable | retry; do not publish bad revision |
-| PDF.js rejects new revision | retain old preview and report viewer error |
-| User opens second `.typ` | cleanly stop old session, open new session |
-| External edit conflict | pause autosave and ask which version to keep |
-| App closes | terminate compiler + watchers; clean session cache |
-| WebView reloads/crashes | backend session survives where practical and frontend can query active snapshot |
-
----
-
-## 21. Logging
-
-Use structured Rust logs with levels:
-
-- `error`: unrecoverable session/app errors;
-- `warn`: recoverable compiler/viewer/cache issues;
-- `info`: open/close/session/compiler lifecycle;
-- `debug`: revision/file-watch details;
-- `trace`: noisy events disabled in release.
-
-Never log full document contents.
-
-Paths may be logged locally for debugging, but crash/telemetry upload is out of scope for v1 and must not be silently added.
-
----
-
-## 22. Test architecture
-
-Testing is part of the architecture, not a final-stage activity.
-
-### 22.1 Rust unit tests
-
-Test pure components without Tauri UI:
-
-- `.typ` path validation;
-- command-line/file-association argument parsing;
-- project-root resolution;
-- session state transitions;
-- stale `SessionId` event rejection;
-- revision retention;
-- custom preview protocol routing/path traversal rejection;
-- source revision/hash conflict logic;
-- cache cleanup root safety.
-
-### 22.2 Frontend unit tests
-
-Use Vitest or equivalent for:
-
-- view-state capture/restore math;
-- session event filtering;
-- toolbar status mapping;
-- editor debounce logic with fake timers;
-- conflict state reducer;
-- preview URL/revision changes.
-
-### 22.3 Real Typst integration tests
-
-Run the pinned Typst sidecar against repository fixtures.
-
-Required fixtures:
-
-```text
-basic/          text + headings + math
-imports/        main.typ imports/includes another .typ
-images/         local SVG/PNG
-bibliography/   .bib + citations
-unicode/        non-ASCII source/path/content
-errors/         intentionally invalid source
-multipage/      enough pages for scroll restoration
-large/          performance/stability fixture
-```
-
-Tests:
-
-- initial compilation produces valid PDF;
-- edit entry file → new PDF;
-- edit imported `.typ` → new PDF;
-- edit `.bib`/image dependency → expected watch rebuild where supported by Typst;
-- introduce syntax error → no new committed revision;
-- fix syntax error → new committed revision;
-- stop session → child process exits.
-
-### 22.4 Frontend/browser component tests
-
-Run PDF.js frontend against test PDFs in a normal browser build:
-
-- load document;
-- zoom;
-- scroll;
-- search;
-- revision swap;
-- old preview stays visible until new one is ready.
-
-### 22.5 Tauri end-to-end tests
-
-Use the current recommended Tauri/WebdriverIO path for desktop E2E testing.
-
-On Windows test:
-
-- app launches;
-- Open button opens fixture via test hook or controlled command;
-- preview becomes ready;
-- editor opens/closes;
-- editor write updates preview;
-- error state keeps old preview;
-- second open request focuses/reuses app where automation permits.
-
-### 22.6 Windows installer acceptance tests
-
-Release candidate must be tested from a clean Windows environment/VM:
-
-1. install NSIS package;
-2. launch Tykuru from Start;
-3. open `.typ` using native dialog;
-4. choose **Open with > Tykuru** for `.typ`;
-5. set association if desired and double-click `.typ`;
-6. verify path with spaces and Unicode characters;
-7. keep Tykuru running and double-click a second `.typ`;
-8. verify existing instance opens/focuses the second file;
-9. uninstall;
-10. verify application files are removed and Windows association behavior is sane.
-
----
-
-## 23. CI and release pipeline
-
-### Pull request / push verification
-
-```text
-checkout
-   │
-   ├─ install pinned Node/pnpm
-   ├─ install stable Rust toolchain
-   ├─ restore caches
-   │
-   ├─ pnpm install --frozen-lockfile
-   ├─ TypeScript typecheck
-   ├─ frontend lint
-   ├─ frontend unit tests
-   ├─ frontend production build
-   │
-   ├─ cargo fmt --check
-   ├─ cargo clippy -- -D warnings
-   ├─ cargo test
-   │
-   └─ Typst fixture integration tests
-```
-
-### Windows release candidate
-
-```text
-Windows runner
-   │
-   ├─ fetch/verify pinned official Typst Windows binary
-   ├─ frontend + Rust verification
-   ├─ build release Tauri binary
-   ├─ run Windows E2E suite
-   ├─ tauri build
-   │    ├─ NSIS setup.exe   (primary)
-   │    └─ MSI              (optional)
-   ├─ smoke install/test if CI permits
-   ├─ calculate SHA-256
-   └─ publish only after release gate passes
-```
-
-Code signing can be introduced when distribution requires it. Do not block the functional v1 architecture on signing infrastructure, but do not call an unsigned development artifact a polished public release.
-
----
-
-## 24. Product UX state
-
-### No document
-
-```text
-Tykuru
-
-Open a Typst document
-[ Open .typ ]
-
-Recent
-...
-```
-
-### Loading
-
-Preview area remains stable and shows subtle loading status.
-
-### Ready
-
-```text
-main.typ                    Ready     Page 3     100%  −  +
-```
-
-### Compiling
-
-```text
-main.typ                    Compiling…
-```
-
-Do not block scrolling while Typst compiles.
-
-### Error
-
-```text
-main.typ                    Error  ⚠
-```
-
-Preview remains the last successful version. Clicking error reveals compiler text in a compact panel.
-
-### Editor save status
-
-Use small states only:
-
-```text
-Saved
-Saving…
-Unsaved
+Clean
+Dirty
+Saving
 Conflict
 ```
 
----
+Behavior:
 
-## 25. Explicit v1 non-goals
+### External change while Tykuru editor is clean
 
-Do not allow scope creep into:
+Reload the editor buffer from disk while preserving reasonable cursor behavior where possible.
 
-- cloud sync;
-- accounts;
-- collaborative editing;
-- Git client;
-- terminal;
-- project tree IDE;
-- full Tinymist/LSP integration;
-- custom Typst compiler embedding;
-- browser version;
-- mobile version;
-- plugin ecosystem;
-- multiple windows/tabs;
-- document conversion suite;
-- template marketplace;
-- custom package manager.
+### External change while Tykuru has pending local changes
 
-These can be separate proposals after v1 is stable.
+Enter `Conflict`.
+
+Do not auto-save over the external content.
+
+User actions:
+
+- **Reload external** — discard local pending editor buffer and load disk.
+- **Keep my version** — explicit confirmation to write current local buffer over disk.
+
+Never silently choose a winner.
 
 ---
 
-## 26. Evolution path after v1
+## 17. Cache architecture
 
-Architecture intentionally leaves extension points:
+Generated output must never pollute the user's Typst project.
 
-### v1.1
+Conceptual location:
 
-- better Typst syntax highlighting;
-- source ↔ preview position synchronization if a reliable mapping can be implemented;
-- outline panel;
-- optional system Typst executable selection;
-- export/open generated PDF;
-- update checker.
+```text
+%LOCALAPPDATA%/Tykuru/cache/sessions/<session-id>/
+├─ candidate.pdf
+├─ revision-000001.pdf
+└─ revision-000002.pdf
+```
 
-### v1.2+
+Rules:
 
-- Tinymist adapter for completion/diagnostics in editor;
-- multiple documents;
-- macOS/Linux packaging;
-- direct Rust Typst-library backend **only if measurements justify replacing the CLI sidecar**.
+- only delete beneath the known Tykuru cache root;
+- never follow user-controlled cleanup paths;
+- tolerate missing files;
+- remove obsolete session cache on normal shutdown where practical;
+- have bounded startup cleanup for stale sessions from crashes.
 
-The sidecar boundary is an advantage: it allows the product to ship before coupling Tykuru to Typst's internal Rust APIs.
-
----
-
-## 27. Definition of architectural completion
-
-The architecture has been implemented successfully when all of the following are true:
-
-- [ ] Windows Tykuru application launches without requiring a separately installed Typst.
-- [ ] User can choose a local `.typ` file from Tykuru.
-- [ ] Installed Tykuru can receive `.typ` files from Windows Explorer/Open-With.
-- [ ] Opening a `.typ` starts the bundled Typst compiler.
-- [ ] A valid document is shown through PDF.js.
-- [ ] Editing the entry file in another editor updates the preview automatically.
-- [ ] Changing an imported source/dependency is handled through Typst's watch behavior.
-- [ ] Compile errors leave the last successful preview visible.
-- [ ] Preview updates preserve zoom/scroll well enough for normal editing.
-- [ ] The collapsible CodeMirror editor can edit and autosave the same `.typ` file.
-- [ ] External and internal edits do not silently overwrite each other.
-- [ ] Closing/switching documents leaves no orphan Typst process.
-- [ ] Tykuru creates no generated PDF in the user's project by default.
-- [ ] Automated unit/integration/E2E suites pass.
-- [ ] NSIS Windows installer builds and passes clean-machine acceptance tests.
-
-At that point Tykuru is a complete minimal local Typst desktop viewer/editor rather than a prototype.
+Cache deletion code requires explicit root-boundary tests.
 
 ---
 
-## 28. Primary technical references
+## 18. Settings
 
-These references were checked while fixing the v1 architecture. Pin dependencies in the repository; do not treat URLs as version locks.
+Keep settings small.
 
-- Typst documentation: https://typst.app/docs/
-- Typst 0.15.1 changelog: https://typst.app/docs/changelog/0.15.1/
-- Typst repository / CLI usage: https://github.com/typst/typst
-- Typst compiler architecture: https://github.com/typst/typst/blob/main/docs/dev/architecture.md
-- Typst PDF export: https://typst.app/docs/reference/pdf/
-- Tauri configuration (`externalBin`, `fileAssociations`): https://v2.tauri.app/reference/config/
-- Tauri sidecars: https://v2.tauri.app/develop/sidecar/
-- Tauri single-instance plugin: https://v2.tauri.app/plugin/single-instance/
-- Tauri Windows installer: https://v2.tauri.app/distribute/windows-installer/
-- Tauri official file-association example: https://github.com/tauri-apps/tauri/tree/dev/examples/file-associations
-- Tauri custom URI protocol Rust API: https://docs.rs/tauri/latest/tauri/struct.Builder.html
-- Tauri WebDriver testing: https://v2.tauri.app/develop/tests/webdriver/
-- PDF.js component viewer example: https://github.com/mozilla/pdf.js/tree/master/examples/components
-- PDF.js getting started: https://github.com/mozilla/pdf.js/blob/master/docs/contents/getting_started/index.md
-- CodeMirror: https://codemirror.net/
+Allowed v1 settings include:
+
+- light/dark/system theme;
+- editor shown/hidden;
+- editor split ratio;
+- last window size/position where safe;
+- bounded recent files list;
+- project-root override by canonical entry path;
+- optional custom Typst font paths if implemented.
+
+Do not store document contents.
+
+No database is required.
+
+---
+
+## 19. UI composition
+
+### 19.1 Default preview mode
+
+```text
+┌───────────────────────────────────────────────────────────────┐
+│ Tykuru   main.typ       Ready               − 100% +     ⋯   │
+├───────────────────────────────────────────────────────────────┤
+│                                                               │
+│                        PDF PREVIEW                            │
+│                                                               │
+└───────────────────────────────────────────────────────────────┘
+```
+
+### 19.2 Split mode
+
+```text
+┌─────────────────────────────┬─────────────────────────────────┐
+│ main.typ                    │ Ready                  100%     │
+├─────────────────────────────┼─────────────────────────────────┤
+│                             │                                 │
+│ CodeMirror                  │ PDF.js                          │
+│                             │                                 │
+│                             │                                 │
+└─────────────────────────────┴─────────────────────────────────┘
+```
+
+### 19.3 Minimal toolbar
+
+Initial controls:
+
+- Open;
+- toggle editor;
+- document name;
+- compile status;
+- zoom out;
+- zoom value/page-width state;
+- zoom in;
+- small overflow menu.
+
+Do not introduce a permanent project sidebar in v1.
+
+---
+
+## 20. Tauri command boundary
+
+Commands should be narrow and typed.
+
+Conceptual command surface:
+
+```text
+open_document_dialog()
+open_document(path_or_open_request)
+close_document(session_id)
+get_active_session()
+read_source(session_id)
+save_source(session_id, text, expected_disk_revision)
+set_project_root(session_id, root)
+get_settings()
+update_settings(patch)
+```
+
+Events:
+
+```text
+session-opened
+compile-state-changed
+preview-updated
+source-changed
+source-conflict
+session-closed
+```
+
+Avoid an API such as:
+
+```text
+execute(command)
+read_file(path)
+write_file(path, data)
+delete_file(path)
+```
+
+These are too broad for the frontend trust boundary.
+
+---
+
+## 21. Security model
+
+Treat file paths, source contents, URLs, and launch arguments as untrusted input.
+
+Required controls:
+
+- no shell interpolation;
+- narrow Tauri permissions;
+- no arbitrary frontend process spawning;
+- no arbitrary frontend filesystem access;
+- no path traversal in preview protocol;
+- cache cleanup stays under cache root;
+- external link opening is deliberate;
+- no Tykuru-owned upload/network behavior;
+- no telemetry by default.
+
+Typst may use network access when resolving an uncached package according to Typst's own behavior. Tykuru should not duplicate that package client.
+
+---
+
+## 22. Error model
+
+Expected errors are represented as application states instead of crashes.
+
+Examples:
+
+- unreadable `.typ`;
+- deleted source file;
+- Typst startup failure;
+- Typst syntax error;
+- missing import;
+- package fetch failure;
+- missing image;
+- candidate PDF read race;
+- malformed candidate PDF;
+- PDF.js load failure;
+- source write failure;
+- external edit conflict.
+
+A Typst syntax error must never terminate Tykuru.
+
+---
+
+## 23. Logging
+
+Use structured Rust logging.
+
+Suggested levels:
+
+- `error` — unrecoverable operation failure;
+- `warn` — recoverable abnormal behavior;
+- `info` — session/compiler lifecycle;
+- `debug` — revision/watch details;
+- `trace` — very noisy development diagnostics.
+
+Never log full document contents or editor buffers by default.
+
+---
+
+## 24. Testing architecture
+
+Testing is built into every layer.
+
+### 24.1 Rust unit tests
+
+Cover:
+
+- open request parsing;
+- path validation;
+- project root validation;
+- session transitions;
+- stale session rejection;
+- preview revision ordering;
+- candidate validation;
+- cache root safety;
+- conflict detection;
+- source write revision checks;
+- process lifecycle helpers.
+
+### 24.2 Frontend unit/component tests
+
+Cover:
+
+- UI state reducers;
+- toolbar state;
+- editor collapse/expand;
+- autosave debounce;
+- save status;
+- conflict state;
+- stale preview revision guard;
+- view-state calculations;
+- theme behavior where practical.
+
+### 24.3 Real Typst integration tests
+
+Do not mock Typst compatibility claims.
+
+Fixtures must cover:
+
+```text
+basic
+imports
+images
+bibliography
+unicode
+multipage
+errors
+fonts
+large
+```
+
+Tests should validate actual generated PDF output and live-watch behavior.
+
+### 24.4 Windows E2E tests
+
+Major flows:
+
+- launch;
+- open `.typ`;
+- preview becomes ready;
+- external save refreshes preview;
+- error keeps last preview;
+- recovery creates new preview;
+- built-in editor saves;
+- document switching rejects stale results;
+- second-instance open works;
+- no orphan Typst process on exit.
+
+### 24.5 Clean-machine acceptance
+
+Use a clean Windows VM for release candidates.
+
+The clean-machine test is required because a development environment may hide missing runtime dependencies or incorrect installer behavior.
+
+---
+
+## 25. Performance targets
+
+These are engineering targets, not guarantees.
+
+For a small/medium local document on normal hardware:
+
+- shell should become interactive quickly;
+- Tykuru's own overhead between completed Typst PDF and preview publication should remain small;
+- preview refresh should not restart the application;
+- viewport should remain stable during normal edits;
+- idle CPU should be near zero aside from the compiler/file-watcher behavior;
+- no full-document rasterization in Rust.
+
+Measure before optimizing.
+
+Always separate:
+
+```text
+Typst compile time
+Tykuru publication overhead
+PDF.js loading/rendering time
+```
+
+---
+
+## 26. Dependency/version policy
+
+Pin important dependencies through lockfiles and explicit configuration.
+
+Typst version upgrades are deliberate release work:
+
+1. change pinned version;
+2. obtain official binary;
+3. verify checksum/source;
+4. run full fixture suite;
+5. run Windows E2E;
+6. update release notes;
+7. commit as an isolated dependency/toolchain change.
+
+Do not have runtime code fetch a newer compiler because one exists.
+
+---
+
+## 27. Git and commit architecture
+
+Git history is part of project maintainability.
+
+### 27.1 Commit format
+
+Use Conventional Commits:
+
+```text
+type(scope): imperative message
+```
+
+Allowed common types:
+
+```text
+feat
+fix
+test
+refactor
+docs
+chore
+build
+ci
+perf
+```
+
+Examples:
+
+```text
+feat(preview): render committed pdf revisions
+feat(editor): add collapsible codemirror pane
+feat(windows): open typ files from explorer
+fix(session): reject stale compiler events
+fix(editor): prevent overwrite after external change
+test(compiler): cover imported file watch updates
+refactor(preview): isolate revision publication
+docs(architecture): define shadcn frontend boundary
+build(typst): pin windows sidecar version
+ci(windows): add installer smoke build
+```
+
+### 27.2 Commit size
+
+Commits should be atomic.
+
+One commit should represent one coherent behavioral or infrastructure change.
+
+Do not combine:
+
+```text
+new PDF viewer
++ unrelated editor refactor
++ dependency upgrades
++ formatting entire repository
+```
+
+### 27.3 Commit only after verification
+
+Before a normal source commit, run the relevant checks.
+
+Preferred full local gate:
+
+```text
+pnpm verify
+```
+
+Compiler/preview changes additionally require:
+
+```text
+pnpm typst:fixtures
+```
+
+Desktop integration changes require E2E when available:
+
+```text
+pnpm test:e2e
+```
+
+Windows-specific changes must be tested on Windows before release even if committed earlier from another development OS.
+
+### 27.4 Stage-gate commits
+
+The work plan is designed so a stable commit exists at the end of every gate.
+
+Recommended pattern:
+
+```text
+feat(shell): establish minimal application layout
+feat(document): open and validate typ files
+feat(compiler): compile typ files with bundled sidecar
+feat(preview): display generated pdf with pdfjs
+feat(watch): refresh preview from typst watch
+...
+```
+
+A gate commit should leave the repository buildable and tests passing.
+
+### 27.5 Never commit
+
+Do not commit:
+
+- `node_modules/`;
+- `dist/`;
+- `src-tauri/target/`;
+- local Tykuru cache;
+- generated candidate/revision PDFs;
+- temporary test copies;
+- secrets/signing credentials;
+- developer-specific settings;
+- Windows installer output unless intentionally attached to a release process;
+- arbitrary downloaded binaries without the project's controlled sidecar process.
+
+### 27.6 Dependency commits
+
+Dependency upgrades should normally be isolated, for example:
+
+```text
+chore(deps): update shadcn dependencies
+chore(deps): update pdfjs
+build(typst): update bundled typst to 0.x.y
+```
+
+Do not hide unrelated behavior changes inside dependency-upgrade commits.
+
+---
+
+## 28. CI architecture
+
+### Pull request / main verification
+
+```text
+checkout
+  ↓
+pnpm install --frozen-lockfile
+  ↓
+frontend typecheck + lint + tests
+  ↓
+Rust fmt + clippy + tests
+  ↓
+Typst fixture integration tests
+  ↓
+frontend build
+```
+
+### Windows release pipeline
+
+```text
+tag/manual release
+       ↓
+verify exact dependencies
+       ↓
+verify official Typst sidecar/checksum
+       ↓
+all unit tests
+       ↓
+Typst integration fixtures
+       ↓
+Tauri Windows build
+       ↓
+Windows E2E
+       ↓
+NSIS installer
+       ↓
+installer smoke/clean-machine checks where automated
+       ↓
+SHA-256 + release artifacts
+```
+
+Do not publish a release artifact from a workflow path that bypasses required tests.
+
+---
+
+## 29. Architecture change procedure
+
+Frozen v1 decisions should not be replaced casually.
+
+If implementation appears to require a significant change:
+
+1. state the concrete blocked requirement;
+2. reproduce the problem;
+3. identify whether the limitation belongs to Tykuru, Tauri, Typst, PDF.js, or Windows;
+4. evaluate the smallest compatible fix;
+5. add/modify tests that demonstrate the requirement;
+6. obtain approval for a frozen-stack change;
+7. update this document before or with the implementation.
+
+Examples of architecture-level changes:
+
+- replacing React;
+- replacing Tauri;
+- replacing PDF.js;
+- linking Typst as a Rust library instead of CLI sidecar;
+- introducing multiple simultaneous documents;
+- adding LSP/Tinymist;
+- adding a database.
+
+---
+
+## 30. Final v1 architecture summary
+
+```text
+Windows Explorer / File Dialog / Drag-Drop
+                    │
+                    ▼
+              OpenRequestRouter
+                    │
+                    ▼
+              DocumentSession
+                    │
+        ┌───────────┴────────────┐
+        │                        │
+        ▼                        ▼
+ SourceService             CompilerService
+ CodeMirror save           official Typst CLI
+        │                        │
+        └────── main.typ ────────┘
+                                 │
+                         typst watch output
+                                 │
+                                 ▼
+                           candidate.pdf
+                                 │
+                         validate + commit
+                                 │
+                                 ▼
+                      immutable PDF revision
+                                 │
+                                 ▼
+                             PDF.js
+                                 │
+                                 ▼
+                        React + shadcn UI
+```
+
+The central rule is:
+
+> If an implementation makes Tykuru substantially more complex than **Tauri → Rust → official `typst watch` → immutable PDF revision → PDF.js**, assume it needs strong justification.
 
