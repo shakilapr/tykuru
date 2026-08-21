@@ -64,14 +64,19 @@ describe("ResizablePanels", () => {
     );
     const preview = screen.getByLabelText("Preview pane");
     expect(preview).toHaveAttribute("data-state", "preview-expanded");
-    expect(screen.queryByLabelText("Editor pane")).toBeNull();
+    // The editor stays mounted but hidden so CodeMirror keeps its buffer/undo.
+    const editor = screen.getByLabelText("Editor pane");
+    expect(editor).toHaveAttribute("data-state", "editor-hidden");
+    expect(editor).toHaveAttribute("hidden");
   });
 
   it("shows editor pane when editorVisible is true", () => {
     render(
       <ResizablePanels editorVisible editorRatio={0.5} editor={<div>ED</div>} preview={<div>PV</div>} />,
     );
-    expect(screen.getByLabelText("Editor pane")).toBeInTheDocument();
+    const editor = screen.getByLabelText("Editor pane");
+    expect(editor).toBeInTheDocument();
+    expect(editor).toHaveAttribute("data-state", "editor");
   });
 });
 

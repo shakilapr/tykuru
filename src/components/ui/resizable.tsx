@@ -28,16 +28,17 @@ export function ResizablePanels({
   const pct = Math.round(editorRatio * 100);
   return (
     <div className={cn("flex h-full w-full", className)}>
-      {editorVisible && (
-        <div
-          className="h-full min-w-0 overflow-hidden border-r border-border"
-          style={{ width: `${pct}%`, flex: `0 0 ${pct}%` }}
-          data-state="editor"
-          aria-label="Editor pane"
-        >
-          {editor}
-        </div>
-      )}
+      {/* The editor stays mounted when collapsed so CodeMirror keeps its buffer
+          and undo history; `hidden` removes it from layout/accessibility (§15). */}
+      <div
+        className="h-full min-w-0 overflow-hidden border-r border-border"
+        style={editorVisible ? { width: `${pct}%`, flex: `0 0 ${pct}%` } : undefined}
+        data-state={editorVisible ? "editor" : "editor-hidden"}
+        aria-label="Editor pane"
+        hidden={!editorVisible}
+      >
+        {editor}
+      </div>
       <div
         className="h-full min-w-0 flex-1"
         data-state={editorVisible ? "split" : "preview-expanded"}
