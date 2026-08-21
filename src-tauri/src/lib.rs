@@ -7,6 +7,7 @@ pub mod open_request;
 pub mod preview;
 pub mod session;
 pub mod shutdown;
+pub mod source;
 
 use app_state::AppState;
 
@@ -24,6 +25,8 @@ pub fn run() {
             commands::document::get_active_session,
             commands::document::compile_document,
             commands::preview::get_preview_pdf_command,
+            commands::editor::read_source_command,
+            commands::editor::save_source_command,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Tykuru")

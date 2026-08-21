@@ -26,6 +26,7 @@ tauri-plugin-shell = "2"
 uuid = { version = "1", features = ["v4"] }
 notify = "6"
 tokio-util = "0.7"
+sha2 = "0.10"
 
 [profile.release]
 panic = "abort"

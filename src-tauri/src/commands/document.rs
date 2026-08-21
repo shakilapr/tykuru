@@ -39,6 +39,10 @@ pub enum CommandError {
     Compiler(#[from] CompileError),
     #[error(transparent)]
     Watch(#[from] CompilerError),
+    #[error(transparent)]
+    SourceRead(#[from] crate::source::SourceReadError),
+    #[error(transparent)]
+    SourceWrite(#[from] crate::source::SourceWriteError),
     #[error("no active session")]
     NoActiveSession,
     #[error("requested session is not the active session")]
