@@ -31,7 +31,13 @@ function Root() {
   );
 
   if (documentState.kind === "open") {
-    return <AppLayout filename={documentState.filename} onOpen={openFromDialog} />;
+    return (
+      <AppLayout
+        sessionId={documentState.sessionId}
+        filename={documentState.filename}
+        onOpen={openFromDialog}
+      />
+    );
   }
   return (
     <StartScreen

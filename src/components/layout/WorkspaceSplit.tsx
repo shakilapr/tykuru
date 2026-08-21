@@ -5,7 +5,7 @@ import { PreviewPane } from "@/preview/PreviewPane";
 import { ResizablePanels } from "@/components/ui/resizable";
 import { openDocument } from "@/bridge/commands";
 
-export function WorkspaceSplit() {
+export function WorkspaceSplit({ sessionId }: { sessionId?: string }) {
   const { editorVisible, splitRatio, setSplitRatio, openDocumentState, errorDocumentState } = useAppState();
   const [dragOver, setDragOver] = useState(false);
 
@@ -39,7 +39,7 @@ export function WorkspaceSplit() {
         editorVisible={editorVisible}
         editorRatio={splitRatio}
         onEditorRatioChange={setSplitRatio}
-        editor={<EditorPane />}
+        editor={<EditorPane sessionId={sessionId} />}
         preview={<PreviewPane />}
       />
     </div>

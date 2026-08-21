@@ -36,3 +36,25 @@ export async function compileDocument(sessionId: string): Promise<CompileOutcome
 export async function getPreviewPdf(sessionId: string, revision: number): Promise<ArrayBuffer> {
   return invoke<ArrayBuffer>("get_preview_pdf_command", { sessionId, revision });
 }
+
+export interface SourceSnapshot {
+  sessionId: string;
+  content: string;
+  diskRevision: string;
+}
+
+export interface SaveResult {
+  diskRevision: string;
+}
+
+export async function readSource(sessionId: string): Promise<SourceSnapshot> {
+  return invoke<SourceSnapshot>("read_source_command", { sessionId });
+}
+
+export async function saveSource(
+  sessionId: string,
+  content: string,
+  expectedDiskRevision: string,
+): Promise<SaveResult> {
+  return invoke<SaveResult>("save_source_command", { sessionId, content, expectedDiskRevision });
+}
