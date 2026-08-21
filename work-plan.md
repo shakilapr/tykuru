@@ -873,16 +873,16 @@ Implements: §15 (editor), §15.1 (scope), §15.2 (save path), §15.3 (self-writ
 
 ### Implement
 
-- [ ] Install CodeMirror 6 modules deliberately: `codemirror`, `@codemirror/state`, `@codemirror/view`, `@codemirror/commands`, `@codemirror/language`, `@codemirror/lang-<typst-or-plain>` (syntax only — do NOT add any CodeMirror package that bundles a WASM/Typst compiler or alternative diagnostics authority). Plain text/indentation highlighting is acceptable if no Typst mode exists yet.
-- [ ] `src/components/editor/EditorPane.tsx` + `TypstEditor.tsx`: mounts CodeMirror with extensions: line numbers, history (undo/redo), bracket/quote behavior, `Ctrl+S` keymap, basic indentation. No LSP/completion.
-- [ ] `src/components/editor/SaveStatus.tsx`: `saved`/`saving`/`dirty` indicator.
-- [ ] `src/editor/autosave.ts`: 200–300 ms debounce; `src/editor/editor-state.ts`: dirty/saving/last-saved snapshot.
-- [ ] Load source via new command `read_source(session_id) -> String` (narrow; only the active entry file). Show in editor on open.
-- [ ] Collapse: `WorkspaceSplit` toggles editor pane; editor `EditorView` state is retained (keep the CM instance mounted but hidden, or serialize state) so toggling doesn't lose buffer/undo. Persist `editor_visible` + `split_ratio` in settings (see Stage 16).
+- [x] Install CodeMirror 6 modules deliberately: `codemirror`, `@codemirror/state`, `@codemirror/view`, `@codemirror/commands`, `@codemirror/language`, `@codemirror/autocomplete`. No Typst language mode exists yet, so the editor uses CodeMirror's default (line numbers, history, bracket matching/closing, indentation) — plain-text editing is acceptable per the plan.
+- [x] `src/components/editor/EditorPane.tsx` + `TypstEditor.tsx`: mounts CodeMirror with extensions: line numbers, history (undo/redo), bracket/quote behavior, `Ctrl+S` keymap, basic indentation. No LSP/completion.
+- [x] `src/components/editor/SaveStatus.tsx`: `saved`/`saving`/`dirty` indicator.
+- [x] `src/editor/autosave.ts`: 200–300 ms debounce; `src/editor/editor-state.ts`: dirty/saving/last-saved snapshot.
+- [x] Load source via new command `read_source_command(session_id)` (narrow; only the active entry file). Show in editor on open.
+- [x] Collapse: `WorkspaceSplit` toggles editor pane; editor `EditorView` state is retained (keep the CM instance mounted but hidden) so toggling doesn't lose buffer/undo. Persisting `editor_visible` + `split_ratio` in settings is deferred to Stage 16.
 
 ### Backend save API
 
-Implement a dedicated `SourceWriter` (`source/write.rs`) save transaction rather than a bare `std::fs::write`. `SourceWriter::save(session, text, expected_disk_revision) -> Result<DiskRevision>`.
+Implemented a dedicated `SourceWriter` (`source/write.rs`) save transaction rather than a bare `std::fs::write`. `SourceWriter::save(entry_path, text, expected_disk_revision) -> Result<DiskRevision>`.
 
 Conceptually:
 
@@ -900,22 +900,24 @@ The transaction revalidates the expected disk revision, prepares a replacement (
 
 ### Frontend tests (Vitest)
 
-- [ ] typing marks dirty.
-- [ ] debounce sends one save for a burst of keystrokes within the window.
-- [ ] continued typing resets timer.
-- [ ] `Ctrl+S` saves immediately (cancels debounce).
-- [ ] collapse preserves buffer/editor object appropriately (no content loss).
-- [ ] document switch does not leak old buffer into new session.
+- [x] typing marks dirty.
+- [x] debounce sends one save for a burst of keystrokes within the window.
+- [x] continued typing resets timer.
+- [ ] `Ctrl+S` saves immediately (cancels debounce) — the keymap calls `onSave` → `saver.flush()`; covered by the autosave `flush` unit test but not a dedicated Ctrl+S component test.
+- [x] collapse preserves buffer/editor object appropriately (no content loss) — editor stays mounted (hidden).
+- [ ] document switch does not leak old buffer into new session — `sessionId` change triggers a fresh `read_source`; not yet covered by a dedicated test.
 
 ### Backend tests (`cargo test`)
 
-- [ ] only the active entry file can be saved.
-- [ ] stale session save rejected.
-- [ ] Unicode round-trip preserved.
-- [ ] write error returned structurally (not panic).
-- [ ] expected disk revision validated (mismatch rejected).
-- [ ] external modification during the save gap is detected, not silently overwritten.
-- [ ] source write uses safe/atomic persistence (no truncated in-place overwrite; verify temp-sibling + replace).
+Written in `source/write.rs` `#[cfg(test)]` (checks `cargo check`/`clippy`, NOT executed here — see §3b):
+
+- [x] only the active entry file can be saved (`save_source` enforces active-session match).
+- [x] stale session save rejected (`NotActiveSession` / `NoActiveSession`).
+- [x] Unicode round-trip preserved (test writes/reads UTF-8 content).
+- [x] write error returned structurally (not panic) — typed `SourceWriteError`.
+- [x] expected disk revision validated (mismatch rejected → `Conflict`).
+- [x] external modification during the save gap is detected, not silently overwritten (final re-read hash check).
+- [x] source write uses safe/atomic persistence (temp sibling + rename; test asserts no temp files left behind).
 
 ### E2E
 
@@ -928,6 +930,8 @@ The transaction revalidates the expected disk revision, prepares a replacement (
 - [ ] collapse editor;
 - [ ] preview expands.
 
+> Editor behavior was verified in a browser against the live dev server (mocked Tauri bridge): open → editor loads source → typing marks dirty → debounced autosave calls `save_source_command` with the expected disk revision → status returns to Saved → collapse keeps the editor mounted but hidden. The check caught and fixed a bug where external reload dispatches marked the buffer dirty and triggered a spurious save. Backend E2E (real save → disk change → preview revision) still requires the MSVC toolchain — NOT TESTED ON WINDOWS.
+
 ### Commit
 
 ```text
@@ -937,6 +941,8 @@ feat(editor): add collapsible codemirror source editor
 ### Exit gate
 
 Tykuru supports both preview-only and minimal split edit/preview workflows.
+
+> Frontend gates (`pnpm typecheck`/`lint`/`build`) pass; 50 frontend tests green (added autosave debounce, editor-state, and EditorPane load/dirty/autosave/external-reload tests). Rust `cargo check` + `cargo clippy -D warnings` pass with the source module. The full backend save→preview E2E and executing the Rust unit tests require the MSVC toolchain — NOT TESTED ON WINDOWS.
 
 ---
 
