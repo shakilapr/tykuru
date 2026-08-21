@@ -37,6 +37,7 @@ export function TypstEditor({
   const onSaveRef = useRef(onSave);
   const readOnlyCompartmentRef = useRef<Compartment | null>(null);
   const valueRef = useRef(value);
+  const applyingExternal = useRef(false);
 
   onChangeRef.current = onChange;
   onSaveRef.current = onSave;
@@ -70,7 +71,7 @@ export function TypstEditor({
           },
         ]),
         EditorView.updateListener.of((update) => {
-          if (update.docChanged) {
+          if (update.docChanged && !applyingExternal.current) {
             onChangeRef.current(update.state.doc.toString());
           }
         }),
@@ -90,15 +91,17 @@ export function TypstEditor({
   }, []);
 
   // Apply external content (document switch / external reload) without losing
-  // undo history where possible.
+  // undo history where possible. Such dispatches must not count as user edits.
   useEffect(() => {
     if (externalValue === null) return;
     const view = viewRef.current;
     if (!view) return;
     if (view.state.doc.toString() === externalValue) return;
+    applyingExternal.current = true;
     view.dispatch({
       changes: { from: 0, to: view.state.doc.length, insert: externalValue },
     });
+    applyingExternal.current = false;
   }, [externalValue]);
 
   // Apply read-only state changes.

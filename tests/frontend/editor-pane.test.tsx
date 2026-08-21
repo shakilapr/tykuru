@@ -92,4 +92,14 @@ describe("EditorPane", () => {
     expect(saveSource).toHaveBeenCalledWith("sid-1", "= Autosaved", "rev-1");
     await screen.findByLabelText("Saved");
   });
+
+  it("does not mark dirty or autosave when the source loads (external reload)", async () => {
+    renderPane();
+    await screen.findByLabelText("Saved");
+    await flushAsync();
+
+    // Loading must not count as a user edit: no dirty state, no save call.
+    expect(screen.queryByLabelText("Unsaved changes")).toBeNull();
+    expect(saveSource).not.toHaveBeenCalled();
+  });
 });
