@@ -1383,46 +1383,46 @@ Use the current Tauri-supported WebDriver/WebdriverIO approach suitable for Wind
 
 #### open-document
 
-- [ ] launch app;
-- [ ] open fixture through test-accessible flow (dialog automation or CLI arg);
-- [ ] filename visible in toolbar;
-- [ ] `compile-state-changed` reaches `Ready`;
-- [ ] PDF canvas / text layer present in preview pane.
+- [x] launch app;
+- [x] open fixture through test-accessible flow (dialog automation or CLI arg);
+- [x] filename visible in toolbar;
+- [x] `compile-state-changed` reaches `Ready`;
+- [x] PDF canvas / text layer present in preview pane.
 
 #### live-preview
 
-- [ ] open temporary fixture copy;
-- [ ] modify source externally (write file from test);
-- [ ] wait for newer `preview-updated` revision;
-- [ ] app stays responsive (no hang/crash).
+- [x] open temporary fixture copy;
+- [x] modify source externally (write file from test);
+- [x] wait for newer `preview-updated` revision;
+- [x] app stays responsive (no hang/crash).
 
 #### dependency-watch
 
-- [ ] open imports fixture;
-- [ ] modify imported file;
-- [ ] verify newer revision (proves Typst dependency graph, not Tykuru).
+- [x] open imports fixture;
+- [x] modify imported file;
+- [x] verify newer revision (proves Typst dependency graph, not Tykuru).
 
 #### error-recovery
 
-- [ ] make source invalid (write bad Typst);
-- [ ] status Error;
-- [ ] existing preview canvas remains;
-- [ ] repair file;
-- [ ] status Ready / new revision.
+- [x] make source invalid (write bad Typst);
+- [x] status Error;
+- [x] existing preview canvas remains;
+- [x] repair file;
+- [x] status Ready / new revision.
 
 #### editor
 
-- [ ] expand editor;
-- [ ] edit;
-- [ ] autosave (wait debounce);
-- [ ] verify disk bytes changed;
-- [ ] verify preview advances.
+- [x] expand editor;
+- [x] edit;
+- [x] autosave (wait debounce);
+- [x] verify disk bytes changed;
+- [ ] verify preview advances (covered implicitly by live-preview; editor-specific assertion pending desktop run).
 
 #### switch-document
 
-- [ ] open A;
-- [ ] open B;
-- [ ] B is active (toolbar filename = B);
+- [x] open A;
+- [x] open B;
+- [x] B is active (toolbar filename = B);
 - [ ] late A events do not alter UI (assert revision belongs to B).
 
 #### shutdown
@@ -1439,6 +1439,8 @@ When reliable in runner:
 - [ ] launch first instance;
 - [ ] invoke second with `.typ`;
 - [ ] existing window receives document (single window, filename = second).
+
+> Specs for the checked items are written in `tests/e2e/desktop.spec.ts` (Playwright driving the real Tauri WebView via `__TAURI_INTERNALS__.invoke`). They skip when no built executable is present and could not be executed on this machine (no Windows desktop build environment): NOT TESTED ON WINDOWS.
 
 ### Commit
 
