@@ -33,6 +33,15 @@ export async function compileDocument(sessionId: string): Promise<CompileOutcome
   return invoke<CompileOutcome>("compile_document", { sessionId });
 }
 
+export async function setProjectRoot(sessionId: string, root: string): Promise<void> {
+  await invoke<void>("set_project_root", { sessionId, root });
+}
+
+/** Opens the native folder picker and applies the chosen project root. */
+export async function setProjectRootDialog(sessionId: string): Promise<void> {
+  await invoke<void>("set_project_root_dialog", { sessionId });
+}
+
 export async function getPreviewPdf(sessionId: string, revision: number): Promise<ArrayBuffer> {
   return invoke<ArrayBuffer>("get_preview_pdf_command", { sessionId, revision });
 }

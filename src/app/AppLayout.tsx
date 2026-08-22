@@ -1,6 +1,7 @@
 import { Toolbar } from "@/components/toolbar/Toolbar";
 import { WorkspaceSplit } from "@/components/layout/WorkspaceSplit";
 import { useCompileState } from "@/preview/use-compile-state";
+import { setProjectRootDialog } from "@/bridge/commands";
 
 export default function AppLayout({
   sessionId,
@@ -12,9 +13,24 @@ export default function AppLayout({
   onOpen: () => void;
 }) {
   const compileState = useCompileState();
+
+  const onSetProjectRoot = async () => {
+    if (!sessionId) return;
+    try {
+      await setProjectRootDialog(sessionId);
+    } catch (e) {
+      console.error("Failed to set project root", e);
+    }
+  };
+
   return (
     <div className="flex h-full w-full flex-col">
-      <Toolbar filename={filename} compileStatus={compileState.status} onOpen={onOpen} />
+      <Toolbar
+        filename={filename}
+        compileStatus={compileState.status}
+        onOpen={onOpen}
+        onSetProjectRoot={onSetProjectRoot}
+      />
       <div className="min-h-0 flex-1">
         <WorkspaceSplit sessionId={sessionId} />
       </div>

@@ -1243,6 +1243,7 @@ read_source(session_id)
 save_source(session_id, text, expected_disk_revision)
 resolve_source_conflict_keep_local(session_id, content, expected_external_revision)
 set_project_root(session_id, root)
+set_project_root_dialog(session_id)  // native folder picker, returns on cancel
 get_settings()
 update_settings(patch)
 ```

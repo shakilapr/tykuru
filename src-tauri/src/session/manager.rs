@@ -58,6 +58,26 @@ impl SessionManager {
     pub fn active_id(&self) -> Option<&SessionId> {
         self.active.as_ref().map(|s| &s.id)
     }
+
+    /// Updates the project root of the session identified by `session_id`.
+    ///
+    /// A stale id is rejected so a root change cannot be applied to a newer
+    /// session (architecture §8.3). The caller has already validated the root;
+    /// this only mutates the manager's owned session.
+    pub fn update_root(
+        &mut self,
+        session_id: &SessionId,
+        project_root: PathBuf,
+    ) -> Result<(), CloseError> {
+        match self.active.as_mut() {
+            Some(session) if &session.id == session_id => {
+                session.project_root = project_root;
+                Ok(())
+            }
+            Some(_) => Err(CloseError::NotActive),
+            None => Err(CloseError::NoActiveSession),
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

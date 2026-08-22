@@ -45,6 +45,8 @@ pub fn run() {
             commands::document::close_document,
             commands::document::get_active_session,
             commands::document::compile_document,
+            commands::document::set_project_root,
+            commands::document::set_project_root_dialog,
             commands::preview::get_preview_pdf_command,
             commands::editor::read_source_command,
             commands::editor::save_source_command,

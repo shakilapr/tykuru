@@ -11,7 +11,7 @@ use tauri_plugin_dialog::DialogExt;
 use crate::app_state::AppState;
 use crate::compiler::{CompileError, CompileOutcome, CompilerError};
 use crate::open_request::{OpenRequestError, OpenRequestRouter};
-use crate::session::{CloseError, SessionId};
+use crate::session::{CloseError, ProjectRootService, RootError, SessionId};
 
 /// Serializable subset of a session safe to surface to the frontend.
 ///
@@ -49,6 +49,10 @@ pub enum CommandError {
     NotActiveSession,
     #[error("session id is invalid: {0}")]
     InvalidSessionId(String),
+    #[error(transparent)]
+    Root(#[from] RootError),
+    #[error(transparent)]
+    Close(#[from] CloseError),
     #[error("lock poisoned")]
     LockPoisoned,
 }
@@ -160,6 +164,74 @@ pub async fn compile_document(
 ) -> Result<CompileOutcome, CommandError> {
     let id = parse_session_id(&session_id)?;
     Ok(crate::compiler::sidecar::compile_once(&app, &id).await?)
+}
+
+/// Changes the project root for the active session and restarts the watcher
+/// with the new `--root` so imported files outside the entry's directory
+/// resolve correctly (architecture §10, Stage 14).
+///
+/// The running `typst watch` is stopped first, then restarted with the new
+/// root. The last-good preview revision stays visible while the restart
+/// happens; only a successful recompile replaces it.
+#[tauri::command]
+pub fn set_project_root(
+    session_id: String,
+    root: String,
+    app: tauri::AppHandle,
+) -> Result<(), CommandError> {
+    let id = parse_session_id(&session_id)?;
+    let root_path = std::path::PathBuf::from(&root);
+
+    let state = app.state::<AppState>();
+    {
+        let mut manager = state
+            .session_manager
+            .lock()
+            .map_err(|_| CommandError::LockPoisoned)?;
+
+        // Validate the root against the active session only.
+        let mut active = manager
+            .get_active()
+            .filter(|s| s.id == id)
+            .cloned()
+            .ok_or(CommandError::NoActiveSession)?;
+        let canonical = ProjectRootService::set_root(&mut active, &root_path)?;
+
+        // Persist the root change onto the manager's stored session, then
+        // restart the watcher so it picks up the new `--root` (sidecar re-reads
+        // `session.project_root` on start). The session_manager lock is released
+        // before restarting because `start_watch` re-locks it (sidecar.rs).
+        manager.update_root(&id, canonical)?;
+    }
+
+    // Stop then restart the watcher. `stop` waits for the child to exit, so no
+    // duplicate watcher can remain (architecture §8.2).
+    if let Err(e) = crate::compiler::stop_watch(&app) {
+        log::warn!("set_project_root: failed to stop watcher: {e}");
+    }
+    crate::compiler::start_watch(&app, &id)?;
+    Ok(())
+}
+
+/// Opens the native folder picker and applies the chosen project root.
+///
+/// Returns `None` if the dialog was cancelled, matching the open-dialog
+/// convention. Native dialog logic stays in the backend (architecture §6.1).
+#[tauri::command]
+pub fn set_project_root_dialog(
+    session_id: String,
+    app: tauri::AppHandle,
+) -> Result<Option<()>, CommandError> {
+    let picked = app.dialog().file().blocking_pick_folder();
+    let Some(folder_path) = picked else {
+        return Ok(None);
+    };
+    let root = folder_path
+        .as_path()
+        .ok_or(CommandError::OpenRequest(OpenRequestError::NotAFile))?
+        .to_path_buf();
+    set_project_root(session_id, root.to_string_lossy().into_owned(), app)?;
+    Ok(Some(()))
 }
 
 /// Registers a validated entry path as a new active session.

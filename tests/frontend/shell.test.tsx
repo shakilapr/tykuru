@@ -51,7 +51,7 @@ describe("Toolbar", () => {
 
   it("every icon-only button has an aria-label", () => {
     renderWithTheme(<Toolbar onOpen={() => {}} previewActive />);
-    for (const name of ["Open .typ", "Toggle editor", "Zoom out", "Zoom in", "More"]) {
+    for (const name of ["Open .typ", "Set project root…", "Toggle editor", "Zoom out", "Zoom in"]) {
       expect(screen.getByRole("button", { name })).toBeInTheDocument();
     }
   });

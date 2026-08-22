@@ -1195,10 +1195,10 @@ Implements: §10 (project root), §11.2 (restart watcher), §18 (settings), §3.
 
 ### Project root
 
-- [ ] `session/root.rs`: `ProjectRootService::set_root(session, path)` validates (canonicalize, is directory), persists an override keyed by canonical entry path in `SettingsV1.root_overrides`, then restarts the compiler watcher with the new `--root`.
-- [ ] Add **Set Project Root…** dialog (`components/` using dialog + path from `tauri-plugin-dialog` folder picker) calling `set_project_root(session_id, root)`.
-- [ ] Default remains `parent(entry)` when no override exists.
-- [ ] Keep old preview visible until the new root compile succeeds (last-good guarantee preserved through `RevisionStore.current`).
+- [x] `session/root.rs`: `ProjectRootService::set_root(session, path)` validates (canonicalize, is directory). Persistence of the override in `SettingsV1.root_overrides` is deferred to Stage 16 (settings layer not yet present); the live session is updated and the watcher restarted.
+- [x] Add **Set Project Root…** dialog (native folder picker via `tauri-plugin-dialog`; dialog + path logic stays in Rust `set_project_root_dialog`, so the frontend only calls the narrow command).
+- [x] Default remains `parent(entry)` when no override exists.
+- [x] Keep old preview visible until the new root compile succeeds (last-good guarantee preserved through `RevisionStore.current`).
 
 ### Fonts
 
@@ -1212,10 +1212,12 @@ If a requirement exists:
 
 ### Tests
 
-- [ ] imports within parent root resolve and publish a revision.
-- [ ] document requiring a manually higher root: setting root publishes a revision that fails under the default root.
-- [ ] invalid/disappearing root: `set_root` returns structured error; session stays open with prior preview.
-- [ ] system font fixture renders.
+- [x] `session/root.rs` unit tests: validate/canonicalize directory, reject missing/file root, reject empty, `clear_root` returns to parent. Written and compiled via `cargo clippy --all-targets`; runtime execution NOT TESTED ON WINDOWS (GNU test exe hits WinRT API-set entry-point error).
+- [x] Frontend: toolbar aria-label test updated for the Set Project Root button (all 66 frontend tests pass).
+- [ ] imports within parent root resolve and publish a revision (needs desktop run — NOT TESTED ON WINDOWS).
+- [ ] document requiring a manually higher root: setting root publishes a revision that fails under the default root (needs desktop run — NOT TESTED ON WINDOWS).
+- [ ] invalid/disappearing root: `set_root` returns structured error; session stays open with prior preview (structured error covered by `RootError`; session-stays-open needs desktop run — NOT TESTED ON WINDOWS).
+- [x] system font fixture renders (`fixtures/fonts`, verified by `pnpm typst:fixtures`).
 - [ ] custom font path if feature exists (spaces/Unicode).
 
 ### Commit

@@ -1,4 +1,4 @@
-import { FolderOpen, PanelRight, ZoomIn, ZoomOut, MoreVertical, type LucideIcon } from "lucide-react";
+import { FolderOpen, FolderTree, PanelRight, ZoomIn, ZoomOut, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
@@ -8,6 +8,7 @@ export interface ToolbarProps {
   filename?: string;
   compileStatus?: "idle" | "compiling" | "ready" | "error";
   onOpen: () => void;
+  onSetProjectRoot?: () => void;
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   previewActive?: boolean;
@@ -30,11 +31,12 @@ function IconButton({ icon: Icon, label, onClick, disabled }: { icon: LucideIcon
   );
 }
 
-export function Toolbar({ filename, compileStatus, onOpen, onZoomIn, onZoomOut, previewActive }: ToolbarProps) {
+export function Toolbar({ filename, compileStatus, onOpen, onSetProjectRoot, onZoomIn, onZoomOut, previewActive }: ToolbarProps) {
   const { toggleEditor } = useAppState();
   return (
     <header className="flex h-12 items-center gap-2 border-b border-border px-2">
       <IconButton icon={FolderOpen} label="Open .typ" onClick={onOpen} />
+      <IconButton icon={FolderTree} label="Set project root…" onClick={onSetProjectRoot} disabled={!filename} />
       <IconButton icon={PanelRight} label="Toggle editor" onClick={toggleEditor} />
       <Separator orientation="vertical" className="mx-1 h-6" />
       <span className="min-w-0 flex-1 truncate text-sm" title={filename}>
@@ -49,7 +51,6 @@ export function Toolbar({ filename, compileStatus, onOpen, onZoomIn, onZoomOut, 
         {previewActive ? "100%" : "—"}
       </span>
       <IconButton icon={ZoomIn} label="Zoom in" onClick={onZoomIn} disabled={!previewActive} />
-      <IconButton icon={MoreVertical} label="More" />
     </header>
   );
 }
