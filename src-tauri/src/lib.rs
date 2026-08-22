@@ -9,6 +9,7 @@ pub mod session;
 pub mod settings;
 pub mod shutdown;
 pub mod source;
+pub mod window_state;
 
 use app_state::AppState;
 use tauri::Manager;
@@ -56,6 +57,8 @@ pub fn run() {
             commands::settings::update_settings,
         ])
         .setup(|app| {
+            // Restore the saved window bounds, if any (Stage 16, §18). Best-effort.
+            crate::window_state::apply_saved(app.handle());
             // Read launch args once; if a `.typ` path is present, open it after
             // the window exists (architecture §9, Stage 11). A missing/absent
             // document argument leaves the normal start screen unaffected.
@@ -69,6 +72,13 @@ pub fn run() {
                 }
             }
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                // Persist the window bounds before teardown so the next launch
+                // restores them (Stage 16, §18).
+                crate::window_state::persist_current(window.app_handle());
+            }
         })
         .build(tauri::generate_context!())
         .expect("error while building Tykuru")
