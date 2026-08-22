@@ -84,3 +84,15 @@ jobs:
         run: pnpm build:windows
       - name: Run desktop E2E against the built app
         run: pnpm test:e2e
+      - name: Upload E2E artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-e2e-artifacts
+          path: |
+            src-tauri/target/release/tykuru.exe
+            playwright-report/
+            test-results/
+            src-tauri/target/release/bundle/nsis/*.sha256
+          retention-days: 7
+          if-no-files-found: ignore
