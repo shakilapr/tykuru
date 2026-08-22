@@ -958,26 +958,32 @@ Implements: §16 (external editor sync), §15.3 (self-write detection), §12.1b 
 
 ### Implement
 
-- [ ] Extend `source/external_watch.rs`: watch `parent(entry.typ)` non-recursively; filter events for the entry file name; debounce; on a hint, `re-stat`/`re-read` the entry and compare a stable snapshot identifier (`DiskRevision` = content hash or mtime+size) against the last known disk revision.
-- [ ] Track `DiskRevision` per session and Tykuru's own last successful write revision (`SourceWriter` records it). Ignore notifications whose new `DiskRevision` equals the self-write identity (no spurious reload/cursor jump).
-- [ ] `src/editor/source-sync.ts`: state machine `Clean | Dirty | Saving | Conflict`.
-  - external change while `Clean` → reload buffer from disk (preserve cursor where possible), update `DiskRevision`.
-  - external change while `Dirty` (pending local edits) → enter `Conflict`; stop autosave; emit `source-conflict` event.
-- [ ] Conflict UI: `Reload external` (discard local pending buffer, load disk) and `Keep my version` (explicit confirm → `save_source` with current expected disk revision, then resume normal state). Never auto-resolve.
-- [ ] Emit `source-changed` when an external reload occurs (frontend can show a subtle indicator).
+- [ ] `source/sync.rs`: `SourceRevisionRegistry` keyed by `SessionId` holding `{ disk_revision, last_self_write }`; pure `classify_change(current_revision, disk_revision, last_self_write) -> ChangeKind` (`SelfWrite` | `Unchanged` | `External`).
+- [ ] `source/external_watch.rs`: watch `parent(entry.typ)` non-recursively; filter events for the entry file name; ~150 ms debounce; re-read the entry, compare `DiskRevision` via `classify_change`, update the ledger, and emit `source-changed(sessionId, revision)` only for `External`.
+- [ ] `AppState`: add `source_revision_registry` + `source_watcher`; start the watcher in `register_session` and drop it in `close_document` (mirrors `candidate_watcher` lifecycle); remove the registry entry on close.
+- [ ] `commands/editor.rs`: `read_source_command` records `disk_revision`; `save_source_command` records `last_self_write` **before** the write and commits on success; new `resolve_source_conflict_keep_local_command(sessionId, content, expected_external_revision)` reuses `SourceWriter::save` (revision-checked overwrite, §15.2).
+- [ ] `src/editor/source-sync.ts`: state machine `Clean | Dirty | Saving | Conflict` with `conflict = { base_revision, local_buffer, external_revision }`; transitions for silent clean-reload, dirty→Conflict, autosave suspension, `reloadExternal`, `keepMyVersion`, and B→C conflict-snapshot refresh.
+- [ ] `src/editor/use-source-sync.ts`: `listen(SOURCE_CHANGED)` drives the machine; exposes `conflict`, `reloadExternal`, `keepMyVersion`.
+- [ ] Conflict UI `ConflictBanner.tsx`: `Reload external` / `Keep my version`; shown only in `Conflict`; never auto-resolve.
+- [ ] `EditorPane.tsx`: silent clean reload via `readSource` → `setExternalValue` + `markLoaded`; suspend autosave in `Conflict`; Keep → `resolve_source_conflict_keep_local`; on keep failure refresh snapshot + "file changed again".
+- [ ] `TypstEditor.tsx`: best-effort cursor/scroll restore on external reload (clamp line/column, approximate scroll).
+- [ ] `bridge/events.ts` `SOURCE_CHANGED`; `bridge/commands.ts` `resolveSourceConflictKeepLocal`.
 
 ### Tests
 
-- [ ] external save while `Clean` reloads editor with disk content.
-- [ ] self-save's notification does not cause unnecessary cursor reset (matched `DiskRevision`).
+- [ ] external save while `Clean` reloads editor with disk content (silently).
+- [ ] self-save's notification does not cause cursor reset or reload (matched `DiskRevision` via `last_self_write`).
 - [ ] external save while `Dirty` enters `Conflict`; autosave suspended.
 - [ ] no automatic write happens during `Conflict`.
 - [ ] `Reload external` produces the disk version in the buffer.
-- [ ] `Keep my version` requires explicit action and then writes the local version (and only then).
+- [ ] `Keep my version` requires explicit action, writes the local version, and only then.
+- [ ] disk B→C during Keep: write rejected, `Conflict` refreshed to C with "file changed again"; next Keep authorizes C.
+- [ ] `classify_change` unit tests: self-write / unchanged / external.
+- [ ] preview is unaffected by editor `Conflict` (independent pipeline).
 
 ### Manual
 
-Open one `.typ` in Tykuru and VS Code. Edit both inside autosave timing and verify no silent overwrite.
+Open one `.typ` in Tykuru and VS Code. Edit both inside autosave timing and verify no silent overwrite; verify the preview keeps refreshing from disk during an editor conflict.
 
 ### Commit
 
@@ -987,7 +993,51 @@ fix(editor): protect against external source conflicts
 
 ### Exit gate
 
-Internal and external editing can safely coexist.
+Internal and external editing can safely coexist; editor `Conflict` never freezes or alters the preview.
+
+---
+
+## 15b. Stage 10b — viewport-virtualized preview rendering
+
+### Goal
+
+Make live refresh feel fast by rasterizing only the visible portion of each new preview revision instead of every page.
+
+### Architecture refs
+
+Implements: §14.2 (lazy viewport rendering), §14.3 (latency measurement), §12.2 (revision ordering/race), §12.3 (last-good).
+
+### Implement
+
+- [ ] `PdfViewer.tsx`: render the visible page first, then ±1–2 neighbors; lazy render farther pages on scroll (IntersectionObserver / virtualization); cancel in-flight page renders on newer revision or viewport change.
+- [ ] Real page dimensions for every page (no rasterization) so placeholders hold correct height and the scrollbar is accurate.
+- [ ] `PreviewPane.tsx`: keep the previous document visible until the new revision's first visible page renders, then swap atomically (complements last-good §12.3).
+- [ ] Preserve §14.1 view-state restoration (page/offset/zoom) after visible pages render.
+- [ ] T0–T5 timing instrumentation (§14.3): capture and log per-stage deltas (save → typst output → revision ready → notified → PDF.js ready → visible page painted).
+
+### Tests
+
+- [ ] visible page renders before off-screen pages.
+- [ ] scroll to a far page triggers its render lazily.
+- [ ] newer revision cancels in-flight renders; stale render never replaces newer (reuses §12.2 guards).
+- [ ] old preview remains visible until the new visible page is ready.
+- [ ] placeholders preserve total scroll height (page dimensions known without rasterizing).
+- [ ] view-state restoration still works after lazy render.
+- [ ] T0–T5 deltas logged on each refresh.
+
+### Manual
+
+Open the 12+ page `multipage` fixture, scroll to page 8, edit source, and verify the preview updates quickly around page 8 rather than rasterizing pages 1–12 first.
+
+### Commit
+
+```text
+perf(preview): render only the visible portion of each revision
+```
+
+### Exit gate
+
+Perceived refresh latency is dominated by compilation/transfer, not by Tykuru eagerly rasterizing every page. Broader application profiling remains Stage 20.
 
 ---
 

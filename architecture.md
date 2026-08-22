@@ -538,10 +538,23 @@ struct DocumentSession {
     entry_path: PathBuf,
     project_root: PathBuf,
     cache_dir: PathBuf,
-    compiler: Option<CompilerProcess>,
-    current_preview: Option<PreviewRevision>,
-    compile_state: CompileState,
-    editor_state: EditorFileState,
+}
+```
+
+`DocumentSession` answers "what document is this" (static identity). Runtime
+state — what is happening to the document right now — lives in `AppState`
+under the same lock discipline as the other registries:
+
+```rust
+struct AppState {
+    session_manager: Mutex<SessionManager>,
+    revision_registry: Mutex<RevisionRegistry>,
+    compile_states: Mutex<CompileStateRegistry>,
+    compiler_manager: CompilerManager,
+    candidate_watcher: Mutex<Option<RecommendedWatcher>>,
+    source_revision_registry: Mutex<SourceRevisionRegistry>,   // §15.3, §16
+    source_watcher: Mutex<Option<RecommendedWatcher>>,         // §12.1b, §16
+    cache_root: PathBuf,
 }
 ```
 
@@ -550,7 +563,7 @@ Use domain-specific wrapper types where useful:
 ```text
 SessionId
 PreviewRevision
-DiskRevision
+DiskRevision    // SHA-256 of file bytes; stronger than mtime/size (§15.3)
 SourceSnapshot
 ```
 
@@ -796,12 +809,17 @@ Because the revision filename is new, it is never exposed while being written. N
 
 Watch parent directories non-recursively rather than watching single files. Editors save differently: some truncate in place, others replace the file via rename. Watching a parent directory produces less surprising behavior for both cases.
 
-- watch `parent(entry.typ)` non-recursively, filter events involving `entry.typ`;
+- watch `parent(entry.typ)` non-recursively, filter events involving `entry.typ` for editor synchronization;
 - watch the session cache directory for `candidate.pdf`;
 - treat `Modify`/`Create`/`Remove`/`Rename` mostly as "something relevant may have happened; re-evaluate authoritative state";
 - a small local debounce/re-stat state machine is preferred over `notify-debouncer-full` for the tiny number of interesting files.
 
 `notify` must never evolve into a second Typst build/dependency system.
+
+The source watcher (`parent(entry.typ)`, entry file only) synchronizes the
+built-in editor buffer. It does **not** track imports, bibliography, images, or
+other compiler dependencies; `typst watch` owns the full source-graph
+dependency watch and refreshes the preview independently (§16).
 
 ### 12.2 Revision ordering
 
@@ -904,6 +922,44 @@ On a newer PDF:
 5. restore approximate page/offset/zoom;
 6. do not steal editor focus.
 
+### 14.2 Lazy viewport rendering
+
+Compilation produces a whole new PDF revision, but the viewer must not eagerly
+rasterize every page of it. Rasterization is the dominant cost on refresh.
+
+Rendering policy per new revision:
+
+- obtain the real page dimensions for every page (cheap; no rasterization) so
+  placeholders hold the correct height and the scrollbar is accurate;
+- render the currently visible page first, then nearby pages (±1–2), and only
+  render farther pages lazily on scroll (IntersectionObserver / virtualization);
+- cancel in-flight page renders when a newer revision or a viewport change
+  arrives;
+- keep the previously displayed document visible until the new revision's first
+  visible page has rendered, then swap atomically (complements §12.3 last-good);
+- view-state restoration (§14.1) runs after the visible pages render.
+
+Tykuru does not predict which source edit affects which pages; Typst owns
+document-wide incremental layout. Tykuru minimizes perceived latency by
+prioritizing only the visible portion of each new revision.
+
+### 14.3 Preview latency measurement
+
+Instrument the refresh pipeline with monotonic timestamps (Stage 10b):
+
+```text
+T0 = source/save change observed
+T1 = Typst output observed (candidate write)
+T2 = stable preview revision ready
+T3 = frontend notified (preview-updated)
+T4 = PDF.js document ready
+T5 = visible/current page painted
+```
+
+Record and log the per-stage deltas. Optimize deeper (range-capable delivery,
+page-level cache, SVG experiment) only when a measured delta justifies it.
+Broader application profiling (memory, CPU, startup, stress) remains Stage 20.
+
 ---
 
 ## 15. Built-in editor architecture
@@ -968,43 +1024,100 @@ record self-write identity
 
 The check-then-write gap is a TOCTOU race; Tykuru detects all normal external-edit conflicts and never knowingly overwrites a newer disk revision. It avoids aggressive Windows write-locking so it remains a good citizen alongside VS Code/Zed/etc.
 
+The same `SourceWriter::save` transaction is reused for **conflict resolution**
+("Keep my version", §16): the caller passes the conflicting external revision as
+the expected revision, so the resolution re-checks disk before overwriting and
+fails into `Conflict` if a newer external write landed in the meantime.
+
 ### 15.3 Self-write detection
 
-Rust tracks enough information about Tykuru's own successful writes to avoid treating the corresponding filesystem notification as a surprising external edit.
+Tykuru must not interpret its own successful write as an external edit.
+
+`last_self_write` is a per-session `DiskRevision` stored in
+`AppState.source_revision_registry`. On save, the new revision (deterministic
+SHA-256 of the text) is recorded **before** the file write becomes observable to
+the source watcher. The watcher ignores a notification whose new `DiskRevision`
+equals `last_self_write`; the identity is content-based, never timestamp-based.
+The registry entry is removed when the session closes, so late filesystem
+events for a dead `SessionId` are discarded (§8.3).
 
 ---
 
 ## 16. External editor synchronization
 
-Tykuru must coexist with VS Code, Zed, Neovim, etc.
-
-State model:
+Tykuru must coexist with VS Code, Zed, Neovim, and any other editor or writer of
+the active `.typ`. Disk is the shared source of truth; every writer goes through
+the filesystem, and the two consumers below are independent.
 
 ```text
-Clean
-Dirty
-Saving
-Conflict
+                     filesystem (paper.typ)
+                          |
+            ┌─────────────┴─────────────┐
+            │                           │
+            ▼                           ▼
+      SourceWatcher               typst watch
+      (entry file only)            (full source graph)
+            │                           │
+            ▼                           ▼
+      editor sync                  PDF revision
+            │                           │
+            ▼                           ▼
+        CodeMirror                    preview
 ```
 
-Behavior:
+### 16.1 Pipelines are independent
 
-### External change while Tykuru editor is clean
+- The **preview follows disk/Typst, never CodeMirror state.** A `Conflict` in
+  the editor never freezes or alters the preview.
+- **Imported/bibliography/image dependencies** are owned by `typst watch`: they
+  refresh the preview but do not touch the built-in editor buffer, which shows
+  the entry file only.
+- The **source watcher** synchronizes only the entry file that the built-in
+  editor displays. It never reimplements Typst's dependency tracking.
 
-Reload the editor buffer from disk while preserving reasonable cursor behavior where possible.
+### 16.2 Editor state model
 
-### External change while Tykuru has pending local changes
+```text
+Clean  ←────────── local edit ────────── Dirty
+  ▲                                        │
+  │ external change                        │ external change
+  │ (silent reload)                        ▼
+  │                                      Conflict
+  │                                        │
+  └─────────── Reload external ────────────┤
+                                           │ Keep my version
+                                           ▼
+                                         Clean
+```
 
-Enter `Conflict`.
+`Saving` is a transient sub-state of `Dirty`/`Clean` while a write is in flight.
 
-Do not auto-save over the external content.
+### 16.3 External change while the editor is Clean
 
-User actions:
+Silently reload the buffer from disk and update the disk-revision ledger. No
+modal, toast, or notification; the workflow is "VS Code save → Tykuru updates",
+the same refresh cadence as the preview. Preserve cursor/selection and scroll
+best-effort: clamp line/column to the new document, restore approximate scroll.
 
-- **Reload external** — discard local pending editor buffer and load disk.
-- **Keep my version** — explicit confirmation to write current local buffer over disk.
+### 16.4 External change while the editor is Dirty
 
-Never silently choose a winner.
+Enter `Conflict`. Autosave is suspended; no automatic write happens. The user
+must choose explicitly — never silently pick a winner.
+
+- **Reload external** — discard the local pending buffer and load disk.
+- **Keep my version** — write the local buffer over disk, **revision-checked**:
+  the conflicting external revision is the expected revision, so if disk moved
+  again (B → C) the write is rejected and `Conflict` remains, refreshed to the
+  latest external revision with a "file changed again" indication. The next
+  Keep authorizes overwriting that newer revision.
+
+### 16.5 Conflict snapshot
+
+The conflict holds `{ base_revision, local_buffer, external_revision }`. When a
+Keep attempt fails against a newer external revision, the snapshot's
+`external_revision` is refreshed to the newest disk revision. Source revisions
+are transient synchronization tokens: old snapshots and registry entries are
+discarded on change or session close. No history/journal is retained.
 
 ---
 
@@ -1128,6 +1241,7 @@ close_document(session_id)
 get_active_session()
 read_source(session_id)
 save_source(session_id, text, expected_disk_revision)
+resolve_source_conflict_keep_local(session_id, content, expected_external_revision)
 set_project_root(session_id, root)
 get_settings()
 update_settings(patch)
@@ -1557,30 +1671,39 @@ Windows Explorer / File Dialog / Drag-Drop
          ▼                        ▼
   SourceService             CompilerService
   SourceWriter save         official Typst CLI
+  + SourceWatcher                │
+  (entry file only)              │
+         │              typst watch output
+         │                        │
+         │                        ▼
+         │             candidate.pdf (notify hint)
+         │                        │
+         │         stable read + sanity + NEW revision
+         │                        │
+         │             preview-updated(id, n)
+         │                        │
+         │             get_preview_pdf(id, n)
+         │                        │
+         │             binary Tauri IPC
+         │                        │
+         │                        ▼
+         │                    PDF.js
          │                        │
          └────── main.typ ────────┘
-                                  │
-                          typst watch output
-                                  │
-                                  ▼
-                       candidate.pdf (notify hint)
-                                  │
-                  stable read + sanity + NEW revision
-                                  │
-                       preview-updated(id, n)
-                                  │
-                       get_preview_pdf(id, n)
-                                  │
-                       binary Tauri IPC
-                                  │
-                                  ▼
-                              PDF.js
-                                  │
-                                  ▼
-                         React + shadcn UI
+                    │
+        source-changed(id, revision)
+                    │
+                    ▼
+         editor sync / conflict (§16)
+                    │
+                    ▼
+            React + shadcn UI
 ```
 
 The central rule is:
 
 > If an implementation makes Tykuru substantially more complex than **Tauri → Rust → official `typst watch` → immutable PDF revision → PDF.js**, assume it needs strong justification.
+
+The two consumer pipelines (preview, editor sync) both read the same
+authoritative `main.typ` but never depend on each other's state (§16.1).
 
