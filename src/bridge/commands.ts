@@ -58,3 +58,16 @@ export async function saveSource(
 ): Promise<SaveResult> {
   return invoke<SaveResult>("save_source_command", { sessionId, content, expectedDiskRevision });
 }
+
+/** Deliberate, user-authorized conflict resolution ("Keep my version"). */
+export async function resolveSourceConflictKeepLocal(
+  sessionId: string,
+  content: string,
+  expectedExternalRevision: string,
+): Promise<SaveResult> {
+  return invoke<SaveResult>("resolve_source_conflict_keep_local_command", {
+    sessionId,
+    content,
+    expectedExternalRevision,
+  });
+}

@@ -92,16 +92,27 @@ export function TypstEditor({
 
   // Apply external content (document switch / external reload) without losing
   // undo history where possible. Such dispatches must not count as user edits.
+  // Best-effort cursor/selection and scroll preservation (§16.3): clamp the
+  // previous cursor offset to the new document and restore approximate scroll.
   useEffect(() => {
     if (externalValue === null) return;
     const view = viewRef.current;
     if (!view) return;
     if (view.state.doc.toString() === externalValue) return;
+
+    const prevHead = view.state.selection.main.head;
+    const prevScrollTop = view.scrollDOM.scrollTop;
+
     applyingExternal.current = true;
     view.dispatch({
       changes: { from: 0, to: view.state.doc.length, insert: externalValue },
     });
     applyingExternal.current = false;
+
+    const newLen = view.state.doc.length;
+    const clamped = Math.min(prevHead, newLen);
+    view.dispatch({ selection: { anchor: clamped } });
+    view.scrollDOM.scrollTop = prevScrollTop;
   }, [externalValue]);
 
   // Apply read-only state changes.

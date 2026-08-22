@@ -1,8 +1,15 @@
-// Save indicator: saved / saving / dirty (architecture §15).
+// Save indicator: saved / saving / dirty / conflict (architecture §15, §16).
 
-import type { SaveStatus } from "@/editor/editor-state";
+export type SaveStatusValue = "saved" | "saving" | "dirty" | "conflict";
 
-export function SaveStatus({ status }: { status: SaveStatus }) {
+export function SaveStatus({ status }: { status: SaveStatusValue }) {
+  if (status === "conflict") {
+    return (
+      <span className="text-xs font-medium text-destructive" role="status" aria-label="Conflict">
+        Conflict
+      </span>
+    );
+  }
   if (status === "saving") {
     return (
       <span className="text-xs text-muted-foreground" role="status" aria-label="Saving">
