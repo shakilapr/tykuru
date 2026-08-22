@@ -11,16 +11,24 @@ import { Button } from "@/components/ui/button";
 
 export function PreviewPane() {
   const [doc, setDoc] = useState<PdfDocumentLike | null>(null);
+  // The document that is actively displayed; when a newer revision is loading
+  // we keep the previous one until its first visible page has rendered (§14.2).
+  const [displayedDoc, setDisplayedDoc] = useState<PdfDocumentLike | null>(null);
   const [viewState, setViewState] = useState<ViewState>(DEFAULT_VIEW_STATE);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const compileState = useCompileState();
+  // T0–T5 latency instrumentation (§14.3).
+  const timingsRef = useRef<{ [k: string]: number }>({});
 
   const controllerRef = useRef<PreviewController | null>(null);
   if (!controllerRef.current) {
     controllerRef.current = new PreviewController({
       onDocument: (d) => {
+        // Begin loading the new revision; keep the old doc displayed until the
+        // new visible page renders (see onVisibleRendered below).
+        timingsRef.current["T4"] = performance.now();
         setDoc(d);
         setError(null);
       },
@@ -28,9 +36,34 @@ export function PreviewPane() {
     });
   }
 
+  // Swap to the new doc once its visible page has rendered, and record T5.
+  const onVisibleRendered = useCallback(
+    (page: number) => {
+      timingsRef.current["T5"] = performance.now();
+      setDisplayedDoc((prev) => {
+        if (prev && prev !== doc) {
+          void prev.destroy();
+        }
+        return doc;
+      });
+      const t = timingsRef.current;
+      const log: string[] = [];
+      for (const k of ["T0", "T1", "T2", "T3", "T4", "T5"]) {
+        if (t[k] !== undefined) log.push(`${k}=${t[k].toFixed(1)}`);
+      }
+      if (t.T0 !== undefined && t.T5 !== undefined) {
+        log.push(`T5-T0=${(t.T5 - t.T0).toFixed(1)}ms`);
+      }
+      console.debug("[preview-latency]", page, log.join(" "));
+    },
+    [doc],
+  );
+
   useEffect(() => {
     const unlisten = listen<[string, number]>(PREVIEW_UPDATED, (e) => {
       const [sessionId, revision] = e.payload;
+      // T3: frontend notified of a new preview revision (§14.3).
+      timingsRef.current["T3"] = performance.now();
       controllerRef.current?.applyEvent({ sessionId, revision });
     });
     return () => {
@@ -80,7 +113,13 @@ export function PreviewPane() {
         </div>
       ) : null}
       <div ref={containerRef} className="min-h-0 flex-1">
-        <PdfViewer doc={doc} viewState={viewState} containerWidth={width} onScrollChange={onScrollChange} />
+        <PdfViewer
+          doc={displayedDoc ?? doc}
+          viewState={viewState}
+          containerWidth={width}
+          onScrollChange={onScrollChange}
+          onVisibleRendered={onVisibleRendered}
+        />
       </div>
     </div>
   );
