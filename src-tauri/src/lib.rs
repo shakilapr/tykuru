@@ -10,6 +10,7 @@ pub mod shutdown;
 pub mod source;
 
 use app_state::AppState;
+use tauri::Manager;
 
 /// Builds the Tauri application, registers plugins, and runs the event loop.
 pub fn run() {
@@ -17,6 +18,26 @@ pub fn run() {
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        // Single-instance: a second `tykuru.exe <file.typ>` launch is forwarded
+        // to the running instance instead of spawning a new window (§9.2).
+        // The callback runs on the first instance and receives the new process
+        // argv; we parse it and route through the same open path as a CLI open.
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            if let Some(path) = crate::open_request::parse_launch_args(argv) {
+                let path_str = path.to_string_lossy().into_owned();
+                let app_handle = app.clone();
+                match crate::commands::document::open_document(path_str, app_handle) {
+                    Ok(_) => log::info!("opened forwarded document from second instance"),
+                    Err(e) => log::warn!("failed to open forwarded document: {e}"),
+                }
+            }
+            // Restore the window if it was minimized/hidden.
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.unminimize();
+                let _ = win.show();
+                let _ = win.set_focus();
+            }
+        }))
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             commands::document::open_document_dialog,
