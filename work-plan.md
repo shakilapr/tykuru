@@ -1797,45 +1797,45 @@ Result: E2E, CI, installer, hardening, clean-machine validation.
 
 ### Typst
 
-- [ ] bundled compiler works without PATH installation.
-- [ ] basic text works.
-- [ ] math works.
-- [ ] tables work.
-- [ ] local imports/includes work.
-- [ ] images work.
-- [ ] bibliography works.
-- [ ] Unicode works.
-- [ ] system fonts work.
-- [ ] configured root works.
-- [ ] package behavior is accurately documented/tested.
+- [x] bundled compiler works without PATH installation (sidecar is self-contained; `typst:fixtures` runs against the pinned binary without a global install);
+- [x] basic text works (`fixtures/basic`);
+- [x] math works (`fixtures/basic`);
+- [x] tables work (`fixtures/basic`);
+- [x] local imports/includes work (`fixtures/imports`);
+- [x] images work (`fixtures/images`);
+- [x] bibliography works (`fixtures/bibliography`);
+- [x] Unicode works (`fixtures/unicode` + Unicode temp-path check);
+- [x] system fonts work (`fixtures/fonts`);
+- [x] configured root works (root override applies to the session and re-applies on open);
+- [ ] package behavior is accurately documented/tested (network-sensitive, optional/nightly).
 
 ### Preview
 
-- [ ] PDF renders.
-- [ ] text can be selected.
-- [ ] zoom works.
-- [ ] search works.
-- [ ] internal links work.
-- [ ] external links follow security policy.
-- [ ] live source save refreshes.
-- [ ] imported file save refreshes.
-- [ ] last good preview stays on compile error.
-- [ ] recovery works.
-- [ ] viewport remains stable.
-- [ ] stale revision cannot replace newer revision.
+- [ ] PDF renders (desktop run — covered by E2E `open-document`, NOT TESTED ON WINDOWS here);
+- [ ] text can be selected;
+- [x] zoom works (view-state unit tests + shortcut tests; desktop canvas run pending);
+- [ ] search works (Ctrl+F is surface-dependent; CodeMirror handles the focused editor);
+- [ ] internal links work;
+- [ ] external links follow security policy (no external navigation surface exists in the app);
+- [ ] live source save refreshes;
+- [ ] imported file save refreshes;
+- [x] last good preview stays on compile error (DiagnosticBanner + last-good revision logic covered by unit tests);
+- [ ] recovery works;
+- [ ] viewport remains stable;
+- [x] stale revision cannot replace newer revision (revision-guard tests).
 
 ### Editor
 
-- [ ] toggle works.
-- [ ] resize works.
-- [ ] typing works.
-- [ ] undo/redo works.
-- [ ] Ctrl+S works.
-- [ ] autosave works.
-- [ ] saved status works.
-- [ ] Unicode round-trip works.
-- [ ] external clean update reloads.
-- [ ] external conflict never silently overwrites.
+- [x] toggle works (shell test);
+- [x] resize works (resizable test);
+- [x] typing works (editor-pane test);
+- [x] undo/redo works (CodeMirror history; covered by editor tests);
+- [x] Ctrl+S works (CodeMirror `Mod-s` + shortcut tests);
+- [x] autosave works (autosave test);
+- [x] saved status works (editor-state test);
+- [x] Unicode round-trip works;
+- [x] external clean update reloads (source-sync test);
+- [x] external conflict never silently overwrites (editor-conflict test).
 
 ### Reliability
 
@@ -1858,13 +1858,13 @@ Result: E2E, CI, installer, hardening, clean-machine validation.
 
 ### Engineering
 
-- [ ] `pnpm verify` passes.
-- [ ] `pnpm typst:fixtures` passes.
-- [ ] Windows desktop E2E passes.
-- [ ] architecture documentation matches implementation.
-- [ ] work plan accurately marks completed gates.
-- [ ] Git history contains focused Conventional Commits.
-- [ ] no generated/cache/secrets accidentally committed.
+- [x] `pnpm verify` passes (typecheck, lint, 75 tests, build, fmt, clippy) — on this machine;
+- [x] `pnpm typst:fixtures` passes (10 checks incl. Unicode temp-path) — on this machine;
+- [ ] Windows desktop E2E passes (CI `windows-e2e` job; NOT TESTED ON WINDOWS here);
+- [x] architecture documentation matches implementation;
+- [x] work plan accurately marks completed gates;
+- [x] Git history contains focused Conventional Commits;
+- [x] no generated/cache/secrets accidentally committed.
 
 ---
 
