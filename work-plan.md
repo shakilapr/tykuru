@@ -1483,10 +1483,12 @@ pnpm typst:fixtures
 
 ### Windows E2E job
 
-- [ ] run on supported Windows runner (job scaffolded in `verify.yml`; disabled until `pnpm build:windows` produces a real artifact in Stage 19);
-- [ ] build application;
-- [ ] run desktop E2E;
+- [x] run on supported Windows runner — `windows-e2e` job enabled in `verify.yml` (`windows-latest`, MSVC toolchain via `dtolnay/rust-toolchain`);
+- [x] build application — `pnpm build:windows` (NSIS + release binary + SHA-256);
+- [x] run desktop E2E — `pnpm test:e2e` against the built `tykuru.exe`;
 - [ ] capture useful logs/artifacts only on failure where possible.
+
+> The job was previously disabled because `pnpm build:windows` was a stub; now that it builds a real artifact it is enabled. Whether the E2E specs pass against the real WebView is pending a green CI run (NOT TESTED ON WINDOWS here).
 
 > `verify.yml` now adds a `typst-fixtures` job (Windows runner) that fetches the pinned official Typst binary and runs `pnpm typst:fixtures` — the executable compatibility gate. The `verify` job already covers frontend typecheck/lint/test/build and `cargo fmt`/`clippy`/`test`.
 

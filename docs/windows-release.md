@@ -36,15 +36,18 @@ Checks on a clean VM (no global Typst installed):
 
 - fresh install;
 - normal launch;
+- window bounds restored from the previous session (position/size/maximized);
 - Open dialog + preview;
 - external live edit refreshes;
 - built-in editor autosave;
-- Set Project Root;
+- Set Project Root (override persists across relaunch);
 - Open With / associated double-click;
 - second-instance file open;
 - path with spaces; Unicode path;
 - restart; uninstall;
 - **no orphan `typst.exe` process** after exit/upgrade/reinstall.
+
+The `windows-e2e` CI job (`.github/workflows/verify.yml`) runs `pnpm build:windows` and `pnpm test:e2e` on a `windows-latest` runner as the automated gate for the desktop-build path.
 
 ## No-orphan-process requirement
 
