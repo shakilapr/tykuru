@@ -1,5 +1,5 @@
-// Tykuru placeholder icon set. Replace with real branded assets before release.
-// Tauri expects at minimum an .ico for Windows bundling.
+// Tykuru placeholder icon set, generated from `source-icon.png` via
+// `pnpm tauri icon` (regenerate with scripts/generate_icon.ps1).
 //
-// This file intentionally contains no code; it exists so the `icons/`
-// directory is tracked in version control from the baseline stage.
+// `icon.ico` is the Windows/NSIS icon referenced by tauri.conf.json. Replace
+// `source-icon.png` with real branded assets before the final release.

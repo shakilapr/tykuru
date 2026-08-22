@@ -1518,7 +1518,7 @@ Produce what a normal Windows user installs.
 
 - [x] product name `Tykuru` (`tauri.conf.json`);
 - [x] stable application identifier (`com.tykuru.app`);
-- [ ] icon set/`.ico` — placeholder icon in place; replace with branded assets before release;
+- [x] icon set/`.ico` — generated placeholder-branded set (`scripts/generate_icon.ps1` + `pnpm tauri icon`) committed under `src-tauri/icons/`; replace `source-icon.png` with real branded assets before final release;
 - [x] publisher/description metadata as appropriate;
 - [x] bundle official Typst sidecar (`bundle.externalBin`);
 - [x] bundle PDF.js assets locally (Vite bundles `pdfjs-dist` worker);
