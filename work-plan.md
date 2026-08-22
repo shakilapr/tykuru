@@ -1571,16 +1571,20 @@ A non-developer can install and use Tykuru on clean Windows.
 
 ### Reliability stress
 
-- [ ] 100 rapid source-save cycles;
-- [ ] 100 document switch cycles;
+Scenarios written in `tests/e2e/stress.spec.ts` (Playwright against the built app, skipped when no executable is present):
+
+- [x] 100 rapid source-save cycles (scenario written);
+- [x] 100 document switch cycles (scenario written);
 - [ ] close app during compile;
-- [ ] delete source while open;
-- [ ] rename/move source while open;
+- [x] delete source while open (scenario written);
+- [x] rename/move source while open (scenario written);
 - [ ] delete configured root while open;
-- [ ] long diagnostics;
+- [x] long diagnostics (scenario written, 200 KB error line);
 - [ ] large multipage PDF;
 - [ ] suspend/resume if practical;
 - [ ] no orphan Typst child after each scenario.
+
+> Execution requires a Windows desktop build (NOT TESTED ON WINDOWS on this machine; delegated to the CI `windows-e2e` job once enabled).
 
 ### Security review
 
