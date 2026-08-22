@@ -958,28 +958,30 @@ Implements: §16 (external editor sync), §15.3 (self-write detection), §12.1b 
 
 ### Implement
 
-- [ ] `source/sync.rs`: `SourceRevisionRegistry` keyed by `SessionId` holding `{ disk_revision, last_self_write }`; pure `classify_change(current_revision, disk_revision, last_self_write) -> ChangeKind` (`SelfWrite` | `Unchanged` | `External`).
-- [ ] `source/external_watch.rs`: watch `parent(entry.typ)` non-recursively; filter events for the entry file name; ~150 ms debounce; re-read the entry, compare `DiskRevision` via `classify_change`, update the ledger, and emit `source-changed(sessionId, revision)` only for `External`.
-- [ ] `AppState`: add `source_revision_registry` + `source_watcher`; start the watcher in `register_session` and drop it in `close_document` (mirrors `candidate_watcher` lifecycle); remove the registry entry on close.
-- [ ] `commands/editor.rs`: `read_source_command` records `disk_revision`; `save_source_command` records `last_self_write` **before** the write and commits on success; new `resolve_source_conflict_keep_local_command(sessionId, content, expected_external_revision)` reuses `SourceWriter::save` (revision-checked overwrite, §15.2).
-- [ ] `src/editor/source-sync.ts`: state machine `Clean | Dirty | Saving | Conflict` with `conflict = { base_revision, local_buffer, external_revision }`; transitions for silent clean-reload, dirty→Conflict, autosave suspension, `reloadExternal`, `keepMyVersion`, and B→C conflict-snapshot refresh.
-- [ ] `src/editor/use-source-sync.ts`: `listen(SOURCE_CHANGED)` drives the machine; exposes `conflict`, `reloadExternal`, `keepMyVersion`.
-- [ ] Conflict UI `ConflictBanner.tsx`: `Reload external` / `Keep my version`; shown only in `Conflict`; never auto-resolve.
-- [ ] `EditorPane.tsx`: silent clean reload via `readSource` → `setExternalValue` + `markLoaded`; suspend autosave in `Conflict`; Keep → `resolve_source_conflict_keep_local`; on keep failure refresh snapshot + "file changed again".
-- [ ] `TypstEditor.tsx`: best-effort cursor/scroll restore on external reload (clamp line/column, approximate scroll).
-- [ ] `bridge/events.ts` `SOURCE_CHANGED`; `bridge/commands.ts` `resolveSourceConflictKeepLocal`.
+- [x] `source/sync.rs`: `SourceRevisionRegistry` keyed by `SessionId` holding `{ disk_revision, last_self_write }`; pure `classify_change(current_revision, disk_revision, last_self_write) -> ChangeKind` (`SelfWrite` | `Unchanged` | `External`).
+- [x] `source/external_watch.rs`: watch `parent(entry.typ)` non-recursively; filter events for the entry file name; ~150 ms debounce; re-read the entry, compare `DiskRevision` via `classify_change`, update the ledger, and emit `source-changed(sessionId, revision)` only for `External`.
+- [x] `AppState`: add `source_revision_registry` + `source_watcher`; start the watcher in `register_session` and drop it in `close_document` (mirrors `candidate_watcher` lifecycle); remove the registry entry on close.
+- [x] `commands/editor.rs`: `read_source_command` records `disk_revision`; `save_source_command` records `last_self_write` **before** the write and commits on success; new `resolve_source_conflict_keep_local_command(sessionId, content, expected_external_revision)` reuses `SourceWriter::save` (revision-checked overwrite, §15.2).
+- [x] `src/editor/source-sync.ts`: state machine `Clean | Dirty | Saving | Conflict` with `conflict = { base_revision, local_buffer, external_revision }`; transitions for silent clean-reload, dirty→Conflict, autosave suspension, `reloadExternal`, `keepMyVersion`, and B→C conflict-snapshot refresh.
+- [x] `src/editor/use-source-sync.ts`: `listen(SOURCE_CHANGED)` drives the machine; exposes `conflict`, `reloadExternal`, `keepMyVersion`, `refreshConflict`.
+- [x] Conflict UI `ConflictBanner.tsx`: `Reload external` / `Keep my version`; shown only in `Conflict`; never auto-resolve.
+- [x] `EditorPane.tsx`: silent clean reload via `readSource` → `setExternalValue` + `markLoaded`; suspend autosave in `Conflict`; Keep → `resolve_source_conflict_keep_local`; on keep failure refresh snapshot + "file changed again".
+- [x] `TypstEditor.tsx`: best-effort cursor/scroll restore on external reload (clamp line/column, approximate scroll).
+- [x] `bridge/events.ts` `SOURCE_CHANGED`; `bridge/commands.ts` `resolveSourceConflictKeepLocal`.
 
 ### Tests
 
-- [ ] external save while `Clean` reloads editor with disk content (silently).
-- [ ] self-save's notification does not cause cursor reset or reload (matched `DiskRevision` via `last_self_write`).
-- [ ] external save while `Dirty` enters `Conflict`; autosave suspended.
-- [ ] no automatic write happens during `Conflict`.
-- [ ] `Reload external` produces the disk version in the buffer.
-- [ ] `Keep my version` requires explicit action, writes the local version, and only then.
-- [ ] disk B→C during Keep: write rejected, `Conflict` refreshed to C with "file changed again"; next Keep authorizes C.
-- [ ] `classify_change` unit tests: self-write / unchanged / external.
-- [ ] preview is unaffected by editor `Conflict` (independent pipeline).
+- [x] external save while `Clean` reloads editor with disk content (silently).
+- [x] self-save's notification does not cause cursor reset or reload (matched `DiskRevision` via `last_self_write`).
+- [x] external save while `Dirty` enters `Conflict`; autosave suspended.
+- [x] no automatic write happens during `Conflict`.
+- [x] `Reload external` produces the disk version in the buffer.
+- [x] `Keep my version` requires explicit action, writes the local version, and only then.
+- [x] disk B→C during Keep: write rejected, `Conflict` refreshed to C with "file changed again"; next Keep authorizes C.
+- [x] `classify_change` unit tests: self-write / unchanged / external.
+- [x] preview is unaffected by editor `Conflict` (independent pipeline).
+
+> Frontend gates (`pnpm typecheck`/`lint`/`test`/`build`) pass with 66 tests green. Backend `cargo check` + `cargo clippy -D warnings` pass; runtime test execution still requires the MSVC toolchain — NOT TESTED ON WINDOWS. Browser smoke check (mocked bridge) verified: editor load, autosave with expected revision, silent clean reload, dirty→ConflictBanner, Keep→resolve with external revision.
 
 ### Manual
 
@@ -1009,25 +1011,25 @@ Implements: §14.2 (lazy viewport rendering), §14.3 (latency measurement), §12
 
 ### Implement
 
-- [ ] `PdfViewer.tsx`: render the visible page first, then ±1–2 neighbors; lazy render farther pages on scroll (IntersectionObserver / virtualization); cancel in-flight page renders on newer revision or viewport change.
-- [ ] Real page dimensions for every page (no rasterization) so placeholders hold correct height and the scrollbar is accurate.
-- [ ] `PreviewPane.tsx`: keep the previous document visible until the new revision's first visible page renders, then swap atomically (complements last-good §12.3).
-- [ ] Preserve §14.1 view-state restoration (page/offset/zoom) after visible pages render.
-- [ ] T0–T5 timing instrumentation (§14.3): capture and log per-stage deltas (save → typst output → revision ready → notified → PDF.js ready → visible page painted).
+- [x] `PdfViewer.tsx`: render the visible page first, then ±1–2 neighbors; lazy render farther pages on scroll; cancel in-flight page renders on newer revision or viewport change (render-token invalidation).
+- [x] Real page dimensions for every page (no rasterization) so placeholders hold correct height and the scrollbar is accurate.
+- [x] `PreviewPane.tsx`: keep the previous document visible until the new revision's first visible page renders, then swap atomically (complements last-good §12.3); old doc destroyed on swap.
+- [x] Preserve §14.1 view-state restoration (page/offset/zoom) after visible pages render.
+- [x] T0–T5 timing instrumentation (§14.3): capture T3 (preview-updated notified), T4 (PDF.js ready), T5 (visible page painted) and log per-stage deltas. T0/T1/T2 are backend timestamps (source change, typst output, revision ready) — frontend logs T3–T5 deltas.
 
 ### Tests
 
-- [ ] visible page renders before off-screen pages.
-- [ ] scroll to a far page triggers its render lazily.
-- [ ] newer revision cancels in-flight renders; stale render never replaces newer (reuses §12.2 guards).
-- [ ] old preview remains visible until the new visible page is ready.
-- [ ] placeholders preserve total scroll height (page dimensions known without rasterizing).
-- [ ] view-state restoration still works after lazy render.
-- [ ] T0–T5 deltas logged on each refresh.
+- [x] visible page renders before off-screen pages (render-token + visible-window ordering).
+- [ ] scroll to a far page triggers its render lazily — verified in the browser smoke check; a dedicated automated test requires a real PDF.js render.
+- [x] newer revision cancels in-flight renders; stale render never replaces newer (render-token invalidation + existing §12.2 guards).
+- [x] old preview remains visible until the new visible page is ready (swap-on-ready in `PreviewPane`).
+- [x] placeholders preserve total scroll height (page dimensions known without rasterizing).
+- [x] view-state restoration still works after lazy render (§14.1 restore effect runs after layout).
+- [x] T0–T5 deltas logged on each refresh (console.debug `[preview-latency]`).
 
 ### Manual
 
-Open the 12+ page `multipage` fixture, scroll to page 8, edit source, and verify the preview updates quickly around page 8 rather than rasterizing pages 1–12 first.
+Open the 12+ page `multipage` fixture, scroll to page 8, edit source, and verify the preview updates quickly around page 8 rather than rasterizing pages 1–12 first. NOT TESTED ON WINDOWS (requires the built desktop app).
 
 ### Commit
 
@@ -1038,6 +1040,8 @@ perf(preview): render only the visible portion of each revision
 ### Exit gate
 
 Perceived refresh latency is dominated by compilation/transfer, not by Tykuru eagerly rasterizing every page. Broader application profiling remains Stage 20.
+
+> Frontend gates pass (66 tests green). The lazy-render swap-on-ready, placeholder sizing, cancellation, and T3–T5 logging are exercised in the browser smoke check against the live dev server; the multipage `typst watch` scenario requires the desktop build — NOT TESTED ON WINDOWS.
 
 ---
 
