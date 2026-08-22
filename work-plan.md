@@ -1483,10 +1483,12 @@ pnpm typst:fixtures
 
 ### Windows E2E job
 
-- [ ] run on supported Windows runner;
+- [ ] run on supported Windows runner (job scaffolded in `verify.yml`; disabled until `pnpm build:windows` produces a real artifact in Stage 19);
 - [ ] build application;
 - [ ] run desktop E2E;
 - [ ] capture useful logs/artifacts only on failure where possible.
+
+> `verify.yml` now adds a `typst-fixtures` job (Windows runner) that fetches the pinned official Typst binary and runs `pnpm typst:fixtures` — the executable compatibility gate. The `verify` job already covers frontend typecheck/lint/test/build and `cargo fmt`/`clippy`/`test`.
 
 ### Commit
 

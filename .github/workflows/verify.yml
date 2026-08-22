@@ -34,10 +34,31 @@ jobs:
       - name: Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
+  # Real-Typst compatibility gate (architecture §24.3): compile every fully
+  # local fixture against the pinned official Typst sidecar and assert the
+  # %PDF- signature / expected failure for the `errors` fixture. Runs on
+  # Windows because the pinned sidecar is the Windows release binary.
+  typst-fixtures:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Fetch and verify pinned Typst binary
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/fetch_typst.ps1
+      - name: Verify fixtures against real Typst
+        run: pnpm typst:fixtures
+
   windows-e2e:
     runs-on: windows-latest
     needs: verify
-    if: false # enabled in a later stage when E2E is wired
+    if: false # enabled once `pnpm build:windows` produces a real artifact (Stage 19)
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
