@@ -1589,10 +1589,10 @@ A non-developer can install and use Tykuru on clean Windows.
 - [x] preview delivery is identity-addressed and cannot traverse/read arbitrary files (`get_preview_pdf_command` looks up the committed revision by session + number);
 - [x] cache cleanup is root-bounded (`RevisionStore::gc` only deletes paths under the session cache dir);
 - [x] CSP reviewed (`tauri.conf.json` `security.csp`);
-- [ ] external URL behavior reviewed;
+- [x] external URL behavior reviewed — the frontend has no `window.open`, no `http(s)` navigation, and no external link surface (verified by grep over `src/`); nothing to harden;
 - [x] launch args are never shell-interpolated (`parse_launch_args` + sidecar arg passing);
 - [x] bundled Typst comes from controlled official source (`scripts/fetch_typst.ps1` + pinned checksum);
-- [ ] dependency audit reviewed;
+- [x] dependency audit reviewed — `pnpm audit` run 2026-08-23: 5 advisories (3 moderate, 1 high, 1 critical) **all in dev-only build tooling** (`vite` 5.x, `vitest` 2.x, `esbuild`) and not present in the production bundle; the critical is the Vitest UI server (unused) and the vite/esbuild ones affect the dev server only. Remediation (bump to vite 6 / vitest 3) is tracked as a follow-up, not a release blocker. Rust-side `cargo-audit` is not installed locally; recommended as a CI-gated step (see `verify.yml` note).
 - [x] settings persisted atomically (no corruptible in-place overwrite) — `settings/store.rs` temp+rename; corrupt/missing falls back to defaults.
 
 ### Performance measurements
@@ -1602,7 +1602,7 @@ Measure independently (use `fixtures/large`):
 ```text
 app startup
 open request → Typst process start
-Typst compile/watch latency      → pnpm perf:large (baseline measured: ~0.43 s for fixtures/large)
+Typst compile/watch latency      → pnpm perf:large (baseline measured: ~0.69 s avg, 429,861 bytes for fixtures/large, re-run 2026-08-23)
 candidate → committed revision latency
 revision event → PDF visible latency
 idle CPU

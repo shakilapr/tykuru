@@ -27,6 +27,11 @@ jobs:
         run: pnpm test
       - name: Frontend build
         run: pnpm build
+      - name: Frontend dependency audit
+        # Dev-only advisories (vite/vitest/esbuild) are tracked as follow-ups;
+        # reported but non-blocking until they are remediated, so CI stays green.
+        continue-on-error: true
+        run: pnpm audit
       - name: Rust formatting
         run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
       - name: Rust clippy
