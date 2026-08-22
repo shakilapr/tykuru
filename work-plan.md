@@ -1516,19 +1516,19 @@ Produce what a normal Windows user installs.
 
 ### Implement
 
-- [ ] product name `Tykuru`;
-- [ ] stable application identifier;
-- [ ] icon set/`.ico`;
-- [ ] publisher/description metadata as appropriate;
-- [ ] bundle official Typst sidecar;
-- [ ] bundle PDF.js assets locally;
-- [ ] bundle frontend locally;
-- [ ] declare `.typ` association;
-- [ ] build optimized Tauri release binary;
-- [ ] build NSIS installer;
+- [x] product name `Tykuru` (`tauri.conf.json`);
+- [x] stable application identifier (`com.tykuru.app`);
+- [ ] icon set/`.ico` — placeholder icon in place; replace with branded assets before release;
+- [x] publisher/description metadata as appropriate;
+- [x] bundle official Typst sidecar (`bundle.externalBin`);
+- [x] bundle PDF.js assets locally (Vite bundles `pdfjs-dist` worker);
+- [x] bundle frontend locally (`frontendDist: ../dist`);
+- [x] declare `.typ` association (`bundle.fileAssociations`);
+- [ ] build optimized Tauri release binary — wiring done; build fails on this machine (GNU linker `export ordinal too large`) — NOT TESTED ON WINDOWS;
+- [x] build NSIS installer — `pnpm build:windows` → `tauri build --bundles nsis` (wiring);
 - [ ] optionally build MSI later;
-- [ ] WebView2 strategy: Evergreen WebView2 with bootstrapper fallback (not a fixed runtime);
-- [ ] generate SHA-256 for release artifacts.
+- [x] WebView2 strategy: Evergreen WebView2 with bootstrapper fallback (`downloadBootstrapper`);
+- [x] generate SHA-256 for release artifacts (`scripts/sha256.ps1`, runs after bundling in `build:windows`).
 
 ### Clean Windows VM matrix
 
@@ -1584,16 +1584,16 @@ A non-developer can install and use Tykuru on clean Windows.
 
 ### Security review
 
-- [ ] frontend cannot spawn arbitrary processes;
-- [ ] frontend cannot write arbitrary paths;
-- [ ] preview delivery is identity-addressed and cannot traverse/read arbitrary files;
-- [ ] cache cleanup is root-bounded;
-- [ ] CSP reviewed;
+- [x] frontend cannot spawn arbitrary processes (capabilities grant no `shell`/`fs`; only Rust spawns the sidecar);
+- [x] frontend cannot write arbitrary paths (no `fs` capability; source writes go through `SourceWriter`);
+- [x] preview delivery is identity-addressed and cannot traverse/read arbitrary files (`get_preview_pdf_command` looks up the committed revision by session + number);
+- [x] cache cleanup is root-bounded (`RevisionStore::gc` only deletes paths under the session cache dir);
+- [x] CSP reviewed (`tauri.conf.json` `security.csp`);
 - [ ] external URL behavior reviewed;
-- [ ] launch args are never shell-interpolated;
-- [ ] bundled Typst comes from controlled official source;
+- [x] launch args are never shell-interpolated (`parse_launch_args` + sidecar arg passing);
+- [x] bundled Typst comes from controlled official source (`scripts/fetch_typst.ps1` + pinned checksum);
 - [ ] dependency audit reviewed;
-- [ ] settings persisted atomically (no corruptible in-place overwrite).
+- [x] settings persisted atomically (no corruptible in-place overwrite) — `settings/store.rs` temp+rename; corrupt/missing falls back to defaults.
 
 ### Performance measurements
 

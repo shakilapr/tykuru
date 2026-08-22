@@ -15,7 +15,7 @@
     "typst:fixtures": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify_fixtures.ps1",
     "perf:large": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/benchmark_large.ps1",
     "test:e2e": "playwright test",
-    "build:windows": "echo \"not implemented: windows build not yet wired\" && exit 1"
+    "build:windows": "pnpm tauri build --bundles nsis && pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/sha256.ps1"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -35,6 +35,7 @@
     "@eslint/js": "^9.7.0",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/vite": "^4.0.0",
+    "@tauri-apps/cli": "^2.11.4",
     "@testing-library/jest-dom": "^6.4.6",
     "@testing-library/react": "^16.0.0",
     "@testing-library/user-event": "^14.5.2",
