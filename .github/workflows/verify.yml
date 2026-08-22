@@ -63,7 +63,6 @@ jobs:
   windows-e2e:
     runs-on: windows-latest
     needs: verify
-    if: false # enabled once `pnpm build:windows` produces a real artifact (Stage 19)
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -73,6 +72,15 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build:windows
-      - run: pnpm test:e2e
+      - name: Install Rust toolchain (MSVC)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build NSIS installer + release binary
+        # windows-latest ships Visual C++ Build Tools (MSVC link.exe), so the
+        # release link that fails on the mingw-only dev machine works here.
+        run: pnpm build:windows
+      - name: Run desktop E2E against the built app
+        run: pnpm test:e2e
