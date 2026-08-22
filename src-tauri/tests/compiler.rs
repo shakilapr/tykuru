@@ -3,6 +3,12 @@
 //! These run against the real sidecar binary resolved from `tauri.conf.json`
 //! `bundle.externalBin`. They require `config/versions.toml` to match the
 //! sidecar on disk (enforced by `scripts/verify_typst.ps1` in CI).
+//!
+//! Gated to Windows: the pinned Typst sidecar is a Windows binary, so these
+//! tests cannot compile/run on the Linux `verify` CI job. They run in the
+//! `typst-fixtures` / `windows-e2e` jobs where the sidecar exists.
+
+#![cfg(target_os = "windows")]
 
 use std::path::PathBuf;
 use std::time::Duration;
