@@ -29,6 +29,21 @@ pub fn run() {
             commands::editor::save_source_command,
             commands::editor::resolve_source_conflict_keep_local_command,
         ])
+        .setup(|app| {
+            // Read launch args once; if a `.typ` path is present, open it after
+            // the window exists (architecture §9, Stage 11). A missing/absent
+            // document argument leaves the normal start screen unaffected.
+            let args: Vec<String> = std::env::args().collect();
+            if let Some(path) = crate::open_request::parse_launch_args(args) {
+                let app_handle = app.handle().clone();
+                let path_str = path.to_string_lossy().into_owned();
+                match crate::commands::document::open_document(path_str, app_handle) {
+                    Ok(_) => log::info!("opened document from launch args"),
+                    Err(e) => log::warn!("failed to open document from launch args: {e}"),
+                }
+            }
+            Ok(())
+        })
         .build(tauri::generate_context!())
         .expect("error while building Tykuru")
         .run(|app, event| {

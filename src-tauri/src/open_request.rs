@@ -83,6 +83,48 @@ fn has_typ_extension(path: &Path) -> bool {
     }
 }
 
+/// Selects the first launch argument that is a usable `.typ` document path
+/// (architecture §9, Stage 11). Returns `None` (not an error) when no document
+/// argument is present, so a normal window launch is unaffected.
+///
+/// Rules:
+/// - skips `--flag`-style and other option arguments;
+/// - converts `file:///C:/...` URIs to native paths;
+/// - ignores `http(s)://` URLs (never treated as document paths);
+/// - only checks the `.typ` extension here; existence/readability is validated
+///   later by `OpenRequestRouter::validate` once the window is ready.
+///
+/// The path is never shell-interpolated; it is passed to the router as-is.
+pub fn parse_launch_args(args: Vec<String>) -> Option<PathBuf> {
+    for arg in args {
+        let trimmed = arg.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed.starts_with('-') {
+            continue; // flag/option
+        }
+        let lower = trimmed.to_ascii_lowercase();
+        if lower.starts_with("http://") || lower.starts_with("https://") {
+            continue; // remote URL, not a document path
+        }
+        let candidate: PathBuf = if lower.starts_with("file://") {
+            // file:///C:/path or file:///C:\path → strip scheme and slashes
+            let rest = trimmed
+                .trim_start_matches("file://")
+                .trim_start_matches('/');
+            // Rebuild a Windows path: replace forward slashes.
+            PathBuf::from(rest.replace('/', "\\"))
+        } else {
+            PathBuf::from(trimmed)
+        };
+        if has_typ_extension(&candidate) {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,5 +206,60 @@ mod tests {
         let out = OpenRequestRouter::normalize(path.to_str().unwrap()).expect("unicode ok");
         assert!(out.exists());
         let _ = std::fs::remove_file(&path);
+    }
+}
+
+#[cfg(test)]
+mod launch_args_tests {
+    use super::*;
+
+    fn args(items: &[&str]) -> Vec<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn picks_simple_typ_path() {
+        let out = parse_launch_args(args(&["tykuru.exe", "C:\\paper\\main.typ"])).unwrap();
+        assert_eq!(out, PathBuf::from("C:\\paper\\main.typ"));
+    }
+
+    #[test]
+    fn picks_path_with_spaces() {
+        let out = parse_launch_args(args(&["tykuru.exe", "C:\\My Paper\\main.typ"])).unwrap();
+        assert_eq!(out, PathBuf::from("C:\\My Paper\\main.typ"));
+    }
+
+    #[test]
+    fn picks_unicode_path() {
+        let out = parse_launch_args(args(&["tykuru.exe", "C:\\用户\\论文.typ"])).unwrap();
+        assert_eq!(out, PathBuf::from("C:\\用户\\论文.typ"));
+    }
+
+    #[test]
+    fn converts_file_uri() {
+        let out = parse_launch_args(args(&["tykuru.exe", "file:///C:/paper/main.typ"])).unwrap();
+        assert_eq!(out, PathBuf::from("C:\\paper\\main.typ"));
+    }
+
+    #[test]
+    fn ignores_flags() {
+        assert!(parse_launch_args(args(&["tykuru.exe", "--flag"])).is_none());
+    }
+
+    #[test]
+    fn ignores_remote_url() {
+        assert!(parse_launch_args(args(&["tykuru.exe", "https://example.com/file.typ"])).is_none());
+    }
+
+    #[test]
+    fn no_args_returns_none() {
+        assert!(parse_launch_args(args(&["tykuru.exe"])).is_none());
+    }
+
+    #[test]
+    fn skips_flags_before_finding_path() {
+        let out =
+            parse_launch_args(args(&["tykuru.exe", "--verbose", "C:\\paper\\main.typ"])).unwrap();
+        assert_eq!(out, PathBuf::from("C:\\paper\\main.typ"));
     }
 }
