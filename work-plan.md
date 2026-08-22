@@ -1059,13 +1059,13 @@ Implements: §9 (opening), §9.1 (path validation), §20 (boundary), §21 (untru
 
 ### Implement
 
-- [ ] `open_request.rs`: `parse_launch_args(args: Vec<String>) -> Option<PathBuf>` that selects the first argument that is a valid `.typ` path; converts `file:///C:/...` to a path; ignores `--flag`, URLs, and empty input. Returns `None` (not an error) when no document argument is present, so normal window launch is unaffected.
-- [ ] In `lib.rs` run setup, read `std::env::args()` once; if a path is parsed, open it through `OpenRequestRouter` after the window is created (or queue until ready). Never shell-interpolate.
-- [ ] Single-instance forwarding (Stage 12) reuses the same `parse_launch_args`.
+- [x] `open_request.rs`: `parse_launch_args(args: Vec<String>) -> Option<PathBuf>` that selects the first argument that is a valid `.typ` path; converts `file:///C:/...` to a path; ignores `--flag`, URLs, and empty input. Returns `None` (not an error) when no document argument is present, so normal window launch is unaffected.
+- [x] In `lib.rs` run setup, read `std::env::args()` once; if a path is parsed, open it through `OpenRequestRouter` after the window is created (or queue until ready). Never shell-interpolate.
+- [x] Single-instance forwarding (Stage 12) reuses the same `parse_launch_args`.
 
 ### Rust tests
 
-`parse_launch_args` cover:
+`parse_launch_args` cover (all written in `open_request.rs`, `cargo check`/`clippy` green; runtime test execution NOT TESTED ON WINDOWS):
 
 ```text
 ["tykuru.exe","C:\\paper\\main.typ"]        -> Some(C:\paper\main.typ)
@@ -1107,19 +1107,19 @@ Implements: §9.2 (single-instance), §20 (boundary), §8.2 (teardown), §8.3 (s
 
 ### Implement
 
-- [ ] Add `tauri-plugin-single-instance` to `Cargo.toml` and `lib.rs` plugin registration (in correct order relative to other plugins).
-- [ ] In the single-instance callback, read the new process args, run `parse_launch_args` (Stage 11), and if a path is found, route through `OpenRequestRouter`.
-- [ ] Before switching, call `SessionManager::close()` (tears down compiler watcher + watchers), then open B.
-- [ ] Restore minimized window (`window.show()`, `set_focus()`, `unminimize()`).
-- [ ] Reuse the existing `preview-updated`/`compile-state-changed` event handlers; they already carry `session_id`, so stale A events are ignored after teardown.
+- [x] Add `tauri-plugin-single-instance` to `Cargo.toml` and `lib.rs` plugin registration (in correct order relative to other plugins).
+- [x] In the single-instance callback, read the new process args, run `parse_launch_args` (Stage 11), and if a path is found, route through `OpenRequestRouter`.
+- [x] Before switching, call `SessionManager::close()` (tears down compiler watcher + watchers), then open B — `register_session` → `SessionManager::open` replaces the active session and drops watchers.
+- [x] Restore minimized window (`window.unminimize()`, `show()`, `set_focus()`).
+- [x] Reuse the existing `preview-updated`/`compile-state-changed` event handlers; they already carry `session_id`, so stale A events are ignored after teardown.
 
 ### Tests
 
 Backend logic (simulate the routing, no GUI needed):
 
-- [ ] second open B replaces A (manager holds B as active).
-- [ ] a compiler event stamped with A's `session_id` after teardown is rejected by `RevisionStore`/controller.
-- [ ] a preview event stamped with A's `session_id` after teardown is rejected.
+- [x] second open B replaces A (manager holds B as active) — covered by `session/manager.rs` `opening_b_replaces_logical_session_a` and `tests/compiler.rs` `watch_recovers_from_stale_session_publish`.
+- [x] a compiler event stamped with A's `session_id` after teardown is rejected by `RevisionStore`/controller — covered by `compile_rejects_stale_session_id`.
+- [x] a preview event stamped with A's `session_id` after teardown is rejected — the watcher/`PreviewController` reject stale sessions (§8.3); covered by frontend `revision-guard` tests.
 
 Manual Windows:
 
@@ -1153,10 +1153,12 @@ Implements: §9.3 (Windows association), §20 (boundary).
 
 ### Implement
 
-- [ ] Add to `tauri.conf.json` `bundle.fileAssociations`: ext `typ`, name `Typst Document`, description, and a per-target command/icon registration. This makes Tykuru *available* as a handler.
-- [ ] Ensure the installer/launcher passes the double-clicked path as a command-line argument so Stage 11/12 routing handles it.
-- [ ] Do not set Tykuru as the forced default; Windows/user choice remains authoritative (§9.3).
-- [ ] Product metadata (publisher/description) set for installer + association display.
+- [x] Add to `tauri.conf.json` `bundle.fileAssociations`: ext `typ`, name `Typst Document`, description, `mimeType: text/plain`, role `Editor`. This makes Tykuru *available* as a handler.
+- [x] Ensure the installer/launcher passes the double-clicked path as a command-line argument so Stage 11/12 routing handles it (NSIS passes the file path as argv; `parse_launch_args` → `open_document`).
+- [x] Do not set Tykuru as the forced default; Windows/user choice remains authoritative (§9.3).
+- [x] Product metadata (`bundle.publisher`) set for installer + association display.
+
+> Config validates via tauri-build during `cargo check`. Manual installed-build tests (Open With, double-click, spaces/Unicode paths) require the NSIS installer — NOT TESTED ON WINDOWS.
 
 ### Manual installed-build tests
 
