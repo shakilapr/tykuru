@@ -10,6 +10,7 @@ use crate::compiler::diagnostic::CompileStateRegistry;
 use crate::compiler::CompilerManager;
 use crate::preview::RevisionRegistry;
 use crate::session::SessionManager;
+use crate::source::SourceRevisionRegistry;
 use notify::RecommendedWatcher;
 
 /// Top-level managed state for the backend.
@@ -24,6 +25,10 @@ pub struct AppState {
     pub compiler_manager: CompilerManager,
     /// Live candidate watcher for the active session (dropped on close/open).
     pub candidate_watcher: Mutex<Option<RecommendedWatcher>>,
+    /// Per-session source-revision ledger (self-write + disk identity, §15.3).
+    pub source_revision_registry: Mutex<SourceRevisionRegistry>,
+    /// Live entry-file watcher for editor synchronization (dropped on close/open).
+    pub source_watcher: Mutex<Option<RecommendedWatcher>>,
     /// Tykuru cache root; all generated output is bounded under this path.
     pub cache_root: PathBuf,
 }
@@ -39,6 +44,8 @@ impl AppState {
             compile_states: Mutex::new(CompileStateRegistry::default()),
             compiler_manager: CompilerManager::new(),
             candidate_watcher: Mutex::new(None),
+            source_revision_registry: Mutex::new(SourceRevisionRegistry::default()),
+            source_watcher: Mutex::new(None),
             cache_root,
         }
     }

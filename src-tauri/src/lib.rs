@@ -27,6 +27,7 @@ pub fn run() {
             commands::preview::get_preview_pdf_command,
             commands::editor::read_source_command,
             commands::editor::save_source_command,
+            commands::editor::resolve_source_conflict_keep_local_command,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Tykuru")

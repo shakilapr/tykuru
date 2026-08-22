@@ -112,8 +112,8 @@ pub fn close_document(session_id: String, app: tauri::AppHandle) -> Result<(), C
         .map_err(|_| CommandError::LockPoisoned)?;
     match manager.close(&id) {
         Ok(()) => {
-            // Tear down the compiler watcher, candidate watcher, and revisions
-            // for the closed session (architecture §8.2).
+            // Tear down the compiler watcher, candidate watcher, source watcher,
+            // and registries for the closed session (architecture §8.2).
             if let Err(e) = crate::compiler::stop_watch(&app) {
                 log::warn!("close: failed to stop compiler watcher: {e}");
             }
@@ -121,7 +121,13 @@ pub fn close_document(session_id: String, app: tauri::AppHandle) -> Result<(), C
             if let Ok(mut guard) = state.candidate_watcher.lock() {
                 *guard = None;
             }
+            if let Ok(mut guard) = state.source_watcher.lock() {
+                *guard = None;
+            }
             if let Ok(mut reg) = state.revision_registry.lock() {
+                reg.remove(&id);
+            }
+            if let Ok(mut reg) = state.source_revision_registry.lock() {
                 reg.remove(&id);
             }
             Ok(())
@@ -191,12 +197,29 @@ fn register_session(
             .map_err(|_| CommandError::LockPoisoned)?;
         *guard = watcher.ok();
     }
+    // Start the entry-file source watcher for editor synchronization (§12.1b,
+    // §16). Dropped on close/open like the candidate watcher.
+    let source_watcher = crate::source::external_watch::start_source_watcher(
+        app.clone(),
+        id.clone(),
+        session.entry_path.clone(),
+    );
+    {
+        let mut guard = state
+            .source_watcher
+            .lock()
+            .map_err(|_| CommandError::LockPoisoned)?;
+        *guard = source_watcher.ok();
+    }
     // Start the live `typst watch` so source changes refresh the preview
     // (Stage 6). The watcher writes candidate.pdf; the candidate watcher turns
     // it into immutable revisions.
     crate::compiler::start_watch(&app, &id)?;
     // Drop stale revisions from any previous session.
     if let Ok(mut reg) = state.revision_registry.lock() {
+        reg.remove(&id);
+    }
+    if let Ok(mut reg) = state.source_revision_registry.lock() {
         reg.remove(&id);
     }
 

@@ -45,6 +45,11 @@ pub fn read_source_command<R: Runtime>(
         .ok_or(CommandError::NoActiveSession)?;
     let content = read_source(&session.entry_path)?;
     let disk_revision = DiskRevision::compute(content.as_bytes());
+    // Record the disk revision so the source watcher's classification is
+    // grounded on what the frontend actually loaded (§16.3).
+    if let Ok(mut reg) = state.source_revision_registry.lock() {
+        reg.note_disk_revision(&id, disk_revision.clone());
+    }
     Ok(SourceSnapshot {
         session_id,
         content,
@@ -76,12 +81,62 @@ pub fn save_source_command<R: Runtime>(
     };
 
     let expected = DiskRevision::from_hex(&expected_disk_revision);
+    let new_revision = DiskRevision::compute(content.as_bytes());
+    // Record the self-write identity BEFORE the write becomes observable so the
+    // source watcher ignores our own notification (§15.3).
+    if let Ok(mut reg) = state.source_revision_registry.lock() {
+        reg.note_self_write(&id, new_revision.clone());
+    }
     let manager = state
         .session_manager
         .lock()
         .map_err(|_| CommandError::LockPoisoned)?;
-    let new_rev = save_source(&manager, &id, &entry_path, &content, &expected)?;
+    let _new_rev = save_source(&manager, &id, &entry_path, &content, &expected)?;
     Ok(SaveResult {
-        disk_revision: new_rev.as_str().to_string(),
+        disk_revision: new_revision.as_str().to_string(),
+    })
+}
+
+/// Writes the local buffer over disk as the deliberate, user-authorized
+/// resolution of a source conflict (§16.4 "Keep my version").
+///
+/// `expected_external_revision` is the external revision the conflict was
+/// detected against. `SourceWriter::save` re-checks disk; if a newer external
+/// write landed in the meantime the write is rejected and `Conflict` remains
+/// (the frontend refreshes the snapshot to the newest revision).
+#[tauri::command]
+pub fn resolve_source_conflict_keep_local_command<R: Runtime>(
+    session_id: String,
+    content: String,
+    expected_external_revision: String,
+    app: tauri::AppHandle<R>,
+) -> Result<SaveResult, CommandError> {
+    let id = parse_id(&session_id)?;
+    let state = app.state::<AppState>();
+    let entry_path = {
+        let manager = state
+            .session_manager
+            .lock()
+            .map_err(|_| CommandError::LockPoisoned)?;
+        manager
+            .get_active()
+            .filter(|s| s.id == id)
+            .map(|s| s.entry_path.clone())
+            .ok_or(CommandError::NoActiveSession)?
+    };
+
+    let expected = DiskRevision::from_hex(&expected_external_revision);
+    let new_revision = DiskRevision::compute(content.as_bytes());
+    // Record self-write before the write so the watcher suppresses our own event.
+    if let Ok(mut reg) = state.source_revision_registry.lock() {
+        reg.note_self_write(&id, new_revision.clone());
+    }
+    let manager = state
+        .session_manager
+        .lock()
+        .map_err(|_| CommandError::LockPoisoned)?;
+    let _new_rev = save_source(&manager, &id, &entry_path, &content, &expected)?;
+    Ok(SaveResult {
+        disk_revision: new_revision.as_str().to_string(),
     })
 }

@@ -36,6 +36,12 @@ use crate::session::SessionId;
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct DiskRevision(String);
 
+impl Default for DiskRevision {
+    fn default() -> Self {
+        Self::compute(b"")
+    }
+}
+
 impl DiskRevision {
     pub fn compute(bytes: &[u8]) -> Self {
         let mut hasher = Sha256::new();
