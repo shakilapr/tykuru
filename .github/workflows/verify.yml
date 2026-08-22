@@ -13,7 +13,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
@@ -30,6 +30,23 @@ jobs:
         # reported but non-blocking until they are remediated, so CI stays green.
         continue-on-error: true
         run: pnpm audit
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Install Tauri Linux system dependencies
+        # The backend links against GTK/WebKit (wry/tao); these system libraries
+        # are required to compile clippy/test on the Ubuntu runner even though
+        # the app targets Windows.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev
       - name: Rust formatting
         run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
       - name: Rust clippy
@@ -48,7 +65,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
       - name: Fetch and verify pinned Typst binary
@@ -64,7 +81,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
       - name: Install Rust toolchain (MSVC)
         uses: dtolnay/rust-toolchain@stable
@@ -72,12 +89,16 @@ jobs:
           targets: x86_64-pc-windows-msvc
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
+      - name: Fetch and verify pinned Typst binary
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/fetch_typst.ps1
       - name: Build NSIS installer + release binary
         # windows-latest ships Visual C++ Build Tools (MSVC link.exe), so the
         # release link that fails on the mingw-only dev machine works here.
         run: pnpm build:windows
       - name: Run desktop E2E against the built app
-        run: pnpm test:e2e
+        run: |
+          npx playwright install chromium
+          pnpm test:e2e
       - name: Upload E2E artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
