@@ -32,7 +32,16 @@
     "externalBin": [
       "binaries/typst-x86_64-pc-windows-msvc"
     ],
-    "fileAssociations": [],
+    "publisher": "Tykuru contributors",
+    "fileAssociations": [
+      {
+        "ext": ["typ"],
+        "name": "Typst Document",
+        "description": "Typst source document",
+        "mimeType": "text/plain",
+        "role": "Editor"
+      }
+    ],
     "windows": {
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
