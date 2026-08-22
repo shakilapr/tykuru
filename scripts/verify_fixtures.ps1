@@ -44,6 +44,33 @@ foreach ($f in $okFixtures) {
     Write-Host "OK   $f ($size bytes)"
 }
 
+# Unicode temp-path check (work-plan Stage 15: "runtime temp test for Unicode
+# source path"). Copies the `unicode` fixture into a temp directory whose path
+# contains non-ASCII characters and compiles it. This exercises the sidecar and
+# Tykuru's path handling without bundling any committed non-ASCII path.
+$unicodeWork = Join-Path $env:TEMP "tykuru-π测试-fixture"
+New-Item -ItemType Directory -Force -Path $unicodeWork | Out-Null
+$unicodeEntry = Join-Path $unicodeWork "main.typ"
+Copy-Item -Force (Join-Path $root "fixtures/unicode/main.typ") $unicodeEntry
+$unicodeOut = Join-Path $unicodeWork "out.pdf"
+Remove-Item -Force $unicodeOut -ErrorAction SilentlyContinue
+$stderr = & $sidecar compile $unicodeEntry $unicodeOut --root $unicodeWork 2>&1 | Out-String
+if (-not (Test-Path $unicodeOut)) {
+    $failures += "unicode-temp-path: compile failed under non-ASCII path`n$stderr"
+} else {
+    $size = (Get-Item $unicodeOut).Length
+    $head = [System.IO.File]::ReadAllBytes($unicodeOut)[0..4]
+    $sig = [System.Text.Encoding]::ASCII.GetString($head)
+    if ($sig -ne "%PDF-") {
+        $failures += "unicode-temp-path: output does not start with %PDF-"
+    } elseif ($size -lt 1024) {
+        $failures += "unicode-temp-path: output too small ($size bytes)"
+    } else {
+        Write-Host "OK   unicode-temp-path ($size bytes)"
+    }
+}
+Remove-Item -Recurse -Force $unicodeWork -ErrorAction SilentlyContinue
+
 # The errors fixture must FAIL compilation (asserts diagnostic surfacing works).
 $entry = Join-Path $root "fixtures/errors/main.typ"
 $out = Join-Path $workDir "errors.pdf"

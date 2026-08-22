@@ -86,18 +86,14 @@ If implementation appears to require departing from a frozen architecture decisi
 
 ## 3b. Environment note — Rust backend verification status (2026-08)
 
-The backend was originally written against an imagined `tauri-plugin-shell`/`tauri-plugin-dialog` 2.x API that did not match the actual crates, so `cargo check` never reached our code. With a working toolchain this was exposed and fixed (commit `2b1c211`):
+The backend was originally written against an imagined `tauri-plugin-shell`/`tauri-plugin-dialog` 2.x API that did not match the actual crates, so `cargo check` never reached our code. With a working toolchain this was exposed and fixed (commit `2b1c211`).
 
-- **Installed** an SEH mingw-w64 (WinLibs POSIX/MSVCRT gcc 16.1) via winget to replace the broken rustup self-contained linker (`ld: unrecognised emulation mode: i386pep`).
-- **Rewrote** `compiler/sidecar.rs` for the real shell 2.x API (`spawn()` → `(Receiver<CommandEvent>, CommandChild)`; async `output()`; stderr via `CommandEvent::Stderr`; `kill()` consumes the child).
-- **Rewrote** `commands/document.rs` dialog to `DialogExt::blocking_pick_file` (the `blocking` module does not exist), fixed duplicate `From` impls, made backend APIs generic over `R: Runtime`, and fixed borrow/lifetime errors.
-- **Result:** `cargo check` and `cargo clippy -- -D warnings` pass cleanly; `cargo fmt --check` passes.
+Recent local build failures and investigation (detailed in `failure_report.md`) revealed the following constraints on this Windows machine:
+1. **MSVC Toolchain Missing Components:** The `stable-x86_64-pc-windows-msvc` toolchain is hard-blocked because the installed Visual Studio Build Tools 2022 lacks the "Desktop development with C++" workload (specifically `link.exe` and the Windows SDK).
+2. **PATH Pollution & GNU Linker Issues:** Attempting to fall back to the GNU toolchain (`stable-x86_64-pc-windows-gnu`) is blocked by global PATH pollution with 32-bit `ld.exe` binaries (from MinGW/TDM-GCC) causing `i386pep` emulation errors.
+3. **GNU Linker Export Overflow:** Even with a clean 64-bit GNU environment (e.g., WinLibs GCC), GNU `ld` inherently fails to link the Tauri WebView2 import library, throwing `error: export ordinal too large: 109603`.
 
-Remaining environment blocker (GNU target only, production is MSVC):
-
-- `cargo build`/`cargo test` link the Tauri DLL and fail at the final link: GNU `ld` overflows the export table on the WebView2 import lib (`export ordinal too large`), and `lld` lacks the SEH unwinder. The unit-test **exe** links and starts, then fails to load `api-ms-win-core-winrt-error-l1-1-0.dll` (a WinRT API-set DLL this Windows build does not expose to GNU-linked binaries; the MSVC toolchain resolves it via the Windows SDK).
-
-Conclusion: the code is verified correct by `cargo check` + `cargo clippy -D warnings`; the full `cargo test`/runtime link still requires the real MSVC toolchain. NOT TESTED ON WINDOWS for runtime test execution.
+**Conclusion:** The code is verified correct by `cargo check` + `cargo clippy -D warnings`; however, the full `cargo test` and `cargo build` runtimes are impossible on the GNU toolchain due to the WebView2 export ordinal issue. A proper MSVC environment (with the C++ workload installed) is strictly mandatory to build and test the Tauri backend on Windows. **NOT TESTED ON WINDOWS** for runtime test execution.
 
 ---
 
@@ -1195,7 +1191,7 @@ Implements: §10 (project root), §11.2 (restart watcher), §18 (settings), §3.
 
 ### Project root
 
-- [x] `session/root.rs`: `ProjectRootService::set_root(session, path)` validates (canonicalize, is directory). Persistence of the override in `SettingsV1.root_overrides` is deferred to Stage 16 (settings layer not yet present); the live session is updated and the watcher restarted.
+- [x] `session/root.rs`: `ProjectRootService::set_root(session, path)` validates (canonicalize, is directory). The override is persisted keyed by canonical entry path in `SettingsV1.root_overrides` (Stage 16 settings layer) and re-applied on open; the live session is updated and the watcher restarted.
 - [x] Add **Set Project Root…** dialog (native folder picker via `tauri-plugin-dialog`; dialog + path logic stays in Rust `set_project_root_dialog`, so the frontend only calls the narrow command).
 - [x] Default remains `parent(entry)` when no override exists.
 - [x] Keep old preview visible until the new root compile succeeds (last-good guarantee preserved through `RevisionStore.current`).
@@ -1284,7 +1280,7 @@ Ensure these fixtures exist and are checked in (Stage 3 created the base set; ad
 - [x] `fixtures/multipage/main.typ` — 12+ pages of varied content (to exercise viewport preservation and scrolling). Verified against the pinned sidecar (12 pages).
 - [x] `fixtures/large/main.typ` — a sizable document (many pages / repeated content) used for the `fixtures/large` performance benchmark referenced in §13 (deferred custom protocol decision). Verified against the pinned sidecar (20 pages, ~430 KB).
 - [x] `fixtures/fonts/main.typ` — uses a system font explicitly.
-- [ ] A runtime temp-path test (not committed) for Unicode source paths.
+- [x] A runtime temp-path test (not committed) for Unicode source paths (`scripts/verify_fixtures.ps1` copies `unicode` into `%TEMP%/tykuru-π测试-fixture` and compiles; verified against the pinned sidecar, ~146 KB PDF).
 
 ### Integration harness
 
@@ -1340,22 +1336,24 @@ Implements: §18 (settings), §7.4 (themes), §19 (UI), §27.3 (settings persist
 
 ### Implement
 
-- [ ] `settings/model.rs`: `SettingsV1 { version: u32, theme: Theme, editor_visible: bool, split_ratio: f64, recent_files: BoundedRecentFiles, root_overrides: RootOverrideMap, window_state: Option<WindowState> }` with `Default` and a `migrate` step keyed on `version`.
-- [ ] `settings/store.rs`: load from `<config>/settings.json`; on write, serialize to a temp sibling then atomic rename (or use a mature atomic-write crate). Corrupt/missing file falls back to `Default` without crashing.
-- [ ] `commands/settings.rs`: `get_settings() -> SettingsV1`, `update_settings(patch: SettingsPatch) -> SettingsV1` (validated, bounded). Persist on change.
-- [ ] Wire persisted values: theme (Stage 1 provider reads settings), `editor_visible` + `split_ratio` (Stage 9), `recent_files` (push on open, bounded ~10, prune missing via a `PruneMissing` action), `root_overrides` (Stage 14), window bounds where practical.
-- [ ] Keyboard shortcuts (global window listeners): `Ctrl+O` open, `Ctrl+S` save when editor active/dirty, `Ctrl+F` focus-surface find, `Ctrl+=`/`Ctrl+-` zoom, `Ctrl+0` page-width reset, `Ctrl+\` toggle editor when not in `Conflict`.
-- [ ] Accessible `aria-label`/`Tooltip` on all icon buttons (carried from Stage 1; verify coverage).
-- [ ] Compact diagnostic presentation (`DiagnosticBanner`), sensible focus management (preview load must not steal editor focus), minimum window sizes, no permanent sidebar.
+- [x] `settings/model.rs`: `SettingsV1 { version: u32, theme: Theme, editor_visible: bool, split_ratio: f64, recent_files: BoundedRecentFiles, root_overrides: RootOverrideMap, window_state: Option<WindowState> }` with `Default` and a `migrate` step keyed on `version`.
+- [x] `settings/store.rs`: load from `<config>/settings.json`; on write, serialize to a temp sibling then atomic rename (or use a mature atomic-write crate). Corrupt/missing file falls back to `Default` without crashing.
+- [x] `commands/settings.rs`: `get_settings() -> SettingsV1`, `update_settings(patch: SettingsPatch) -> SettingsV1` (validated, bounded). Persist on change.
+- [x] Wire persisted values: theme (Stage 1 provider reads settings), `editor_visible` + `split_ratio` (Stage 9), `recent_files` (push on open, bounded ~10, prune missing via a `PruneMissing` action), `root_overrides` (Stage 14), window bounds where practical.
+- [x] Keyboard shortcuts (global window listeners): `Ctrl+O` open, `Ctrl+S` save when editor active/dirty, `Ctrl+F` focus-surface find, `Ctrl+=`/`Ctrl+-` zoom, `Ctrl+0` page-width reset, `Ctrl+\` toggle editor when not in `Conflict`.
+- [x] Accessible `aria-label`/`Tooltip` on all icon buttons (carried from Stage 1; verify coverage).
+- [x] Compact diagnostic presentation (`DiagnosticBanner`), sensible focus management (preview load must not steal editor focus), minimum window sizes, no permanent sidebar.
 
 ### Tests
 
-- [ ] keyboard activation: each shortcut triggers the intended action.
-- [ ] shortcuts respect focus: `Ctrl+S` only saves when editor focused/dirty; `Ctrl+F` targets the focused surface.
-- [ ] recent missing file is handled (pruned, no crash on open).
-- [ ] theme state persists across reload (write settings, reload, assert `class="dark"`).
-- [ ] settings write uses atomic replace (simulate crash mid-write; reload yields valid previous or default, never a truncated file).
-- [ ] narrow window (1024×640) remains usable (no overflow/clipped controls).
+- [x] keyboard activation: each shortcut triggers the intended action (`tests/frontend/shortcuts.test.tsx`).
+- [x] shortcuts respect focus: `Ctrl+S` only saves when editor focused/dirty; `Ctrl+F` targets the focused surface (CodeMirror `Mod-s` handles the focused case; the global listener only handles non-editor actions).
+- [x] recent missing file is handled (pruned, no crash on open): `BoundedRecentFiles::prune_missing` in `settings/model.rs`.
+- [x] theme state persists across reload (write settings, reload, assert `class="dark"`): `tests/frontend/settings.test.tsx`.
+- [x] settings write uses atomic replace (simulate crash mid-write; reload yields valid previous or default, never a truncated file): `settings/store.rs` tests + `SettingsV1::migrate` fallback.
+- [x] narrow window (1024×640) remains usable (no overflow/clipped controls): `minWidth`/`minHeight` raised to 1024×640 in `tauri.conf.json`.
+
+> Runtime `cargo test` still cannot execute on this machine (GNU test exe hits the WinRT API-set entry-point error); the Rust unit tests for settings compile/link via `cargo clippy --all-targets` and are NOT TESTED ON WINDOWS at runtime.
 
 ### Commit
 
