@@ -10,6 +10,7 @@ use crate::compiler::diagnostic::CompileStateRegistry;
 use crate::compiler::CompilerManager;
 use crate::preview::RevisionRegistry;
 use crate::session::SessionManager;
+use crate::settings::SettingsStore;
 use crate::source::SourceRevisionRegistry;
 use notify::RecommendedWatcher;
 
@@ -31,6 +32,8 @@ pub struct AppState {
     pub source_watcher: Mutex<Option<RecommendedWatcher>>,
     /// Tykuru cache root; all generated output is bounded under this path.
     pub cache_root: PathBuf,
+    /// Typed settings store (atomic persistence, architecture §18).
+    pub settings_store: SettingsStore,
 }
 
 impl AppState {
@@ -38,6 +41,8 @@ impl AppState {
     pub fn new() -> Self {
         let cache_root = crate::open_request::tykuru_cache_root()
             .unwrap_or_else(|| PathBuf::from(".tykuru-cache"));
+        let config_root = crate::open_request::tykuru_config_root()
+            .unwrap_or_else(|| PathBuf::from(".tykuru-config"));
         Self {
             session_manager: Mutex::new(SessionManager::new()),
             revision_registry: Mutex::new(RevisionRegistry::default()),
@@ -47,6 +52,7 @@ impl AppState {
             source_revision_registry: Mutex::new(SourceRevisionRegistry::default()),
             source_watcher: Mutex::new(None),
             cache_root,
+            settings_store: SettingsStore::new(config_root),
         }
     }
 }

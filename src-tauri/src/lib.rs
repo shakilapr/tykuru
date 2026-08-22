@@ -6,6 +6,7 @@ pub mod compiler;
 pub mod open_request;
 pub mod preview;
 pub mod session;
+pub mod settings;
 pub mod shutdown;
 pub mod source;
 
@@ -51,6 +52,8 @@ pub fn run() {
             commands::editor::read_source_command,
             commands::editor::save_source_command,
             commands::editor::resolve_source_conflict_keep_local_command,
+            commands::settings::get_settings,
+            commands::settings::update_settings,
         ])
         .setup(|app| {
             // Read launch args once; if a `.typ` path is present, open it after

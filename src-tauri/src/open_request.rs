@@ -20,6 +20,15 @@ pub fn tykuru_cache_root() -> Option<PathBuf> {
     Some(PathBuf::from(local).join("Tykuru").join("cache"))
 }
 
+/// Well-known config location for Tykuru on Windows: `%LOCALAPPDATA%/Tykuru`.
+///
+/// The `settings.json` file lives directly in this directory (architecture
+/// §18). The settings store is bounded to this root.
+pub fn tykuru_config_root() -> Option<PathBuf> {
+    let local = std::env::var_os("LOCALAPPDATA")?;
+    Some(PathBuf::from(local).join("Tykuru"))
+}
+
 #[derive(Debug, Error)]
 pub enum OpenRequestError {
     #[error("path is empty")]

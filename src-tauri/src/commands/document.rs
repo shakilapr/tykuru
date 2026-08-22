@@ -183,7 +183,7 @@ pub fn set_project_root(
     let root_path = std::path::PathBuf::from(&root);
 
     let state = app.state::<AppState>();
-    {
+    let (canonical, entry_path) = {
         let mut manager = state
             .session_manager
             .lock()
@@ -196,12 +196,24 @@ pub fn set_project_root(
             .cloned()
             .ok_or(CommandError::NoActiveSession)?;
         let canonical = ProjectRootService::set_root(&mut active, &root_path)?;
+        let entry_path = active.entry_path.clone();
 
         // Persist the root change onto the manager's stored session, then
         // restart the watcher so it picks up the new `--root` (sidecar re-reads
         // `session.project_root` on start). The session_manager lock is released
         // before restarting because `start_watch` re-locks it (sidecar.rs).
-        manager.update_root(&id, canonical)?;
+        manager.update_root(&id, canonical.clone())?;
+        (canonical, entry_path)
+    };
+
+    // Persist the override keyed by canonical entry path (§10). Reads the
+    // current settings, updates the map, saves atomically. A settings I/O
+    // failure is non-fatal: the live session already has the new root.
+    if let Ok(mut settings) = state.settings_store.load() {
+        settings.root_overrides.insert(entry_path, canonical);
+        if let Err(e) = state.settings_store.save(&settings) {
+            log::warn!("set_project_root: failed to persist override: {e}");
+        }
     }
 
     // Stop then restart the watcher. `stop` waits for the child to exit, so no
@@ -252,7 +264,25 @@ fn register_session(
         .filter(|s| s.id == id)
         .cloned()
         .ok_or(CommandError::NoActiveSession)?;
+    // Re-apply a persisted project-root override keyed by canonical entry path
+    // (§10, Stage 14 persistence via SettingsV1.root_overrides). Falls back to
+    // the default `parent(entry)` when no override exists.
+    if let Ok(settings) = state.settings_store.load() {
+        if let Some(root) = settings.root_overrides.get(&session.entry_path) {
+            let _ = manager.update_root(&id, root.clone());
+        }
+    }
     drop(manager);
+
+    // Push the opened entry onto the bounded recent-files list and persist
+    // (§18). Best-effort: a settings I/O failure must not fail the open.
+    if let Ok(mut settings) = state.settings_store.load() {
+        settings.recent_files.push(session.entry_path.clone());
+        settings.recent_files.prune_missing();
+        if let Err(e) = state.settings_store.save(&settings) {
+            log::warn!("register_session: failed to persist recent file: {e}");
+        }
+    }
 
     // Replace any prior watcher and start a candidate watcher for the new session
     // (architecture §12.1b). The previous session's watcher is dropped here.
