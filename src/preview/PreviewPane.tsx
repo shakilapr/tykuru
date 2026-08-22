@@ -8,6 +8,7 @@ import { DEFAULT_VIEW_STATE, resetZoom, ViewState, zoomIn, zoomOut } from "./vie
 import { useCompileState } from "./use-compile-state";
 import { DiagnosticBanner } from "@/components/preview/DiagnosticBanner";
 import { Button } from "@/components/ui/button";
+import { SHORTCUT_EVENTS } from "@/app/shortcut-events";
 
 export function PreviewPane() {
   const [doc, setDoc] = useState<PdfDocumentLike | null>(null);
@@ -83,6 +84,21 @@ export function PreviewPane() {
   const onZoomIn = useCallback(() => setViewState((s) => zoomIn(s)), []);
   const onZoomOut = useCallback(() => setViewState((s) => zoomOut(s)), []);
   const onReset = useCallback(() => setViewState((s) => resetZoom(s)), []);
+
+  // Global shortcut delivery (Ctrl+= / Ctrl+- / Ctrl+0) dispatched on window.
+  useEffect(() => {
+    const zoomInHandler = () => onZoomIn();
+    const zoomOutHandler = () => onZoomOut();
+    const resetHandler = () => onReset();
+    window.addEventListener(SHORTCUT_EVENTS.ZOOM_IN, zoomInHandler);
+    window.addEventListener(SHORTCUT_EVENTS.ZOOM_OUT, zoomOutHandler);
+    window.addEventListener(SHORTCUT_EVENTS.ZOOM_RESET, resetHandler);
+    return () => {
+      window.removeEventListener(SHORTCUT_EVENTS.ZOOM_IN, zoomInHandler);
+      window.removeEventListener(SHORTCUT_EVENTS.ZOOM_OUT, zoomOutHandler);
+      window.removeEventListener(SHORTCUT_EVENTS.ZOOM_RESET, resetHandler);
+    };
+  }, [onZoomIn, onZoomOut, onReset]);
 
   const onScrollChange = useCallback(
     (pos: Pick<ViewState, "visiblePage" | "relativeOffset">) =>

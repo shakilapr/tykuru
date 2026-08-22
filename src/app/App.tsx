@@ -3,9 +3,11 @@ import { ThemeProvider, useAppState } from "@/app/app-state";
 import AppLayout from "@/app/AppLayout";
 import { StartScreen } from "@/components/StartScreen";
 import { openDocument, openDocumentDialog } from "@/bridge/commands";
+import { useGlobalShortcuts } from "@/app/use-global-shortcuts";
 
 function Root() {
-  const { documentState, openingDocumentState, openDocumentState, errorDocumentState } = useAppState();
+  const { documentState, openingDocumentState, openDocumentState, errorDocumentState, toggleEditor } =
+    useAppState();
 
   const openFromDialog = useCallback(async () => {
     openingDocumentState();
@@ -29,6 +31,11 @@ function Root() {
     },
     [openingDocumentState, openDocumentState, errorDocumentState],
   );
+
+  // Global keyboard shortcuts (Stage 16). Ctrl+S and Ctrl+F are delivered by
+  // the CodeMirror editor when it is focused; the global listener only handles
+  // the non-editor actions.
+  useGlobalShortcuts({ onOpen: openFromDialog, onToggleEditor: toggleEditor });
 
   if (documentState.kind === "open") {
     return (
