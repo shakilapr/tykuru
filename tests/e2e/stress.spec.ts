@@ -2,23 +2,32 @@ import { test, expect, type Page } from "@playwright/test";
 import { mkdirSync, writeFileSync, rmSync, readFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { appExeExists, invoke, launchApp, type LaunchedApp } from "./tauri";
+import { appExeExists, invoke, launchApp, LaunchUnavailableError, type LaunchedApp } from "./tauri";
 
-let app: LaunchedApp;
+let app: LaunchedApp | undefined;
 let page: Page;
 
 test.beforeAll(async () => {
   if (!appExeExists()) {
     test.skip(true, `built executable not found; run pnpm build:windows first`);
   }
-  app = await launchApp();
+  try {
+    app = await launchApp();
+  } catch (e) {
+    if (e instanceof LaunchUnavailableError) {
+      test.skip(true, e.message);
+    }
+    throw e;
+  }
   page = app.page;
   await expect(page.getByRole("button", { name: "Open .typ" })).toBeVisible();
 });
 
 test.afterAll(async () => {
-  await app.browser.close();
-  app.proc.kill("SIGKILL");
+  if (app) {
+    await app.browser.close();
+    app.proc.kill("SIGKILL");
+  }
 });
 
 function tempProject(name: string): string {

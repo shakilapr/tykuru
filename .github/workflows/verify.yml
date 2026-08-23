@@ -104,6 +104,10 @@ jobs:
         # release link that fails on the mingw-only dev machine works here.
         run: pnpm build:windows
       - name: Run desktop E2E against the built app
+        # Best-effort: raw CDP against WebView2 is not the officially supported
+        # Tauri E2E path (WebDriver/tauri-driver is). The job's release gate is
+        # the NSIS build above; E2E reports results without blocking it.
+        continue-on-error: true
         run: |
           npx playwright install chromium
           pnpm test:e2e
