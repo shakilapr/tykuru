@@ -212,7 +212,9 @@ mod tests {
     fn recent_files_prune_missing_on_patch() {
         let base = SettingsV1::default();
         // Nonexistent paths must be pruned, never surfaced.
-        let files: Vec<String> = (0..15).map(|i| format!("C:\\docs\\missing\\f{i}.typ")).collect();
+        let files: Vec<String> = (0..15)
+            .map(|i| format!("C:\\docs\\missing\\f{i}.typ"))
+            .collect();
         let out = apply_patch(
             base,
             SettingsPatch {
