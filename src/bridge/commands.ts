@@ -1,8 +1,75 @@
 // Typed wrappers around Tauri `invoke` for document commands.
 // This is the ONLY place the frontend calls into document IPC (architecture §6.1).
 
-import { invoke } from "@tauri-apps/api/core";
+import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import type { OpenDocumentResult, SessionSummary } from "./types";
+
+const MOCK_SESSION_ID = "mock-session-123";
+let mockContent = `= Tykuru Sample File
+This is a test of the Tykuru editor.
+
+* Bold text* and _italic text_.
+
+- Bullet list
+- Item 2
+`;
+
+// True when running in a plain browser (Vite dev without Tauri), where the
+// backend is absent and commands are mocked locally.
+function isBrowserMode(): boolean {
+  return !window.__TAURI_INTERNALS__ && !window.__TAURI_IPC__;
+}
+
+type MockArgs = Record<string, unknown> | undefined;
+
+async function invoke<T>(cmd: string, args?: MockArgs): Promise<T> {
+  if (!isBrowserMode()) {
+    return tauriInvoke(cmd, args);
+  }
+
+  console.log("[mock-ipc]", cmd, args);
+  switch (cmd) {
+    case "get_active_session":
+      return null as T;
+    case "open_document_dialog":
+    case "open_document": {
+      const path = typeof args?.path === "string" ? args.path : "sample.typ";
+      const filename = path.split(/[\\/]/).pop() || "sample.typ";
+      const result: OpenDocumentResult = {
+        session: { id: MOCK_SESSION_ID, filename, entry_path: path },
+      };
+      return result as unknown as T;
+    }
+    case "read_source_command":
+      return { sessionId: MOCK_SESSION_ID, content: mockContent, diskRevision: "1" } as unknown as T;
+    case "save_source_command":
+      if (typeof args?.content === "string") mockContent = args.content;
+      return { diskRevision: "2" } as unknown as T;
+    case "resolve_source_conflict_keep_local_command":
+      if (typeof args?.content === "string") mockContent = args.content;
+      return { diskRevision: "2" } as unknown as T;
+    case "get_preview_pdf_command": {
+      // Browser mode has no real compiled PDF; return an empty buffer so the
+      // viewer shows an empty canvas rather than erroring on missing IPC.
+      try {
+        const res = await fetch("/sample.pdf");
+        if (!res.ok) throw new Error("sample.pdf not found");
+        return (await res.arrayBuffer()) as unknown as T;
+      } catch {
+        return new ArrayBuffer(0) as unknown as T;
+      }
+    }
+    case "compile_document":
+      return { success: true, exitCode: 0, stderr: "", candidatePath: "mock" } as unknown as T;
+    case "close_document":
+    case "set_project_root":
+    case "set_project_root_dialog":
+      return undefined as T;
+    default:
+      console.warn("[mock-ipc] unmocked command:", cmd);
+      return null as T;
+  }
+}
 
 export async function openDocumentDialog(): Promise<SessionSummary | null> {
   const result = await invoke<OpenDocumentResult | null>("open_document_dialog");

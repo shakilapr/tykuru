@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { ThemeProvider, useAppState } from "@/app/app-state";
 import AppLayout from "@/app/AppLayout";
 import { StartScreen } from "@/components/StartScreen";
@@ -36,6 +36,16 @@ function Root() {
   // the CodeMirror editor when it is focused; the global listener only handles
   // the non-editor actions.
   useGlobalShortcuts({ onOpen: openFromDialog, onToggleEditor: toggleEditor });
+
+  // Browser-mode convenience: when running against the Vite dev server without
+  // Tauri (no IPC surface), auto-open a sample document so the UI is usable.
+  // Fires once on mount; the `empty`-state guard prevents duplicate opens.
+  useEffect(() => {
+    const isBrowser = !window.__TAURI_INTERNALS__ && !window.__TAURI_IPC__;
+    if (isBrowser && documentState.kind === "empty") {
+      void openFromPath("sample.typ");
+    }
+  }, []);
 
   if (documentState.kind === "open") {
     return (
