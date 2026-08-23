@@ -220,10 +220,12 @@ mod tests {
         let sid = SessionId::generate();
         let mut store = RevisionStore::default();
         let res = store.commit(&sid, &cache, &[]);
-        // Empty write either errors (some filesystems) or succeeds (Windows).
+        // `commit` only fails with a write error; an empty write succeeds on
+        // Windows (creates an empty revision file) — the empty-candidate guard
+        // lives in `read_stable_candidate`, not `commit`.
         match res {
             Ok(rev) => assert_eq!(rev.number, 0),
-            Err(RevisionError::Write(_)) | Err(RevisionError::Empty) => {}
+            Err(RevisionError::Write(_)) => {}
             Err(other) => panic!("unexpected error: {other}"),
         }
         let _ = std::fs::remove_dir_all(&cache);
