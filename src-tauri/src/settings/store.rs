@@ -19,8 +19,6 @@ pub enum StoreError {
     NoConfigDir,
     #[error("failed to read settings file: {0}")]
     Read(#[source] std::io::Error),
-    #[error("settings file is corrupt: {0}")]
-    Corrupt(#[source] serde_json::Error),
     #[error("failed to write settings file: {0}")]
     Write(#[source] std::io::Error),
 }
@@ -40,7 +38,7 @@ impl SettingsStore {
     }
 
     /// Loads settings, migrating older files. Missing/corrupt files fall back
-    /// to `Default` (never a crash).
+    /// to `Default` (never a crash; architecture §18).
     pub fn load(&self) -> Result<SettingsV1, StoreError> {
         let path = self.settings_path();
         let raw = match fs::read(&path) {
@@ -50,7 +48,16 @@ impl SettingsStore {
         };
         let value: serde_json::Value = match serde_json::from_slice(&raw) {
             Ok(v) => v,
-            Err(e) => return Err(StoreError::Corrupt(e)),
+            Err(e) => {
+                // A corrupt settings file must not crash the app; log and use
+                // defaults (a later save replaces the broken file).
+                log::warn!(
+                    "settings: corrupt {} ({}); using defaults",
+                    path.display(),
+                    e
+                );
+                return Ok(SettingsV1::default());
+            }
         };
         Ok(SettingsV1::migrate(&value).unwrap_or_default())
     }

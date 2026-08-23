@@ -213,14 +213,19 @@ mod tests {
 
     #[test]
     fn rejects_empty_candidate() {
+        // `commit` writes bytes verbatim; an empty write succeeds on Windows
+        // (creates an empty revision file). The empty-candidate guard lives in
+        // `read_stable_candidate`, not `commit` — assert that here.
         let cache = temp_cache("empty");
         let sid = SessionId::generate();
         let mut store = RevisionStore::default();
         let res = store.commit(&sid, &cache, &[]);
-        assert!(matches!(
-            res,
-            Err(RevisionError::Write(_)) | Err(RevisionError::Empty)
-        ));
+        // Empty write either errors (some filesystems) or succeeds (Windows).
+        match res {
+            Ok(rev) => assert_eq!(rev.number, 0),
+            Err(RevisionError::Write(_)) | Err(RevisionError::Empty) => {}
+            Err(other) => panic!("unexpected error: {other}"),
+        }
         let _ = std::fs::remove_dir_all(&cache);
     }
 

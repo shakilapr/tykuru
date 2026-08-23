@@ -183,7 +183,36 @@ mod tests {
     #[test]
     fn recent_files_are_capped_and_pruned() {
         let base = SettingsV1::default();
-        let files: Vec<String> = (0..15).map(|i| format!("C:\\docs\\f{i}.typ")).collect();
+        // Create 15 real files so prune_missing keeps them; the cap must
+        // truncate to MAX_FILES (missing files are pruned, so with all files
+        // present only the cap applies).
+        let mut created = Vec::new();
+        let dir = std::env::temp_dir().join("tykuru-recent-cap");
+        let _ = std::fs::create_dir_all(&dir);
+        for i in 0..15 {
+            let p = dir.join(format!("f{i}.typ"));
+            std::fs::write(&p, b"x").expect("write");
+            created.push(p.to_string_lossy().into_owned());
+        }
+        let out = apply_patch(
+            base,
+            SettingsPatch {
+                recent_files: Some(created),
+                ..Default::default()
+            },
+        );
+        assert_eq!(out.recent_files.files.len(), BoundedRecentFiles::MAX_FILES);
+        for p in &out.recent_files.files {
+            assert!(p.exists(), "surfaced file must exist");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn recent_files_prune_missing_on_patch() {
+        let base = SettingsV1::default();
+        // Nonexistent paths must be pruned, never surfaced.
+        let files: Vec<String> = (0..15).map(|i| format!("C:\\docs\\missing\\f{i}.typ")).collect();
         let out = apply_patch(
             base,
             SettingsPatch {
@@ -191,9 +220,6 @@ mod tests {
                 ..Default::default()
             },
         );
-        assert_eq!(out.recent_files.files.len(), BoundedRecentFiles::MAX_FILES);
-        // prune_missing removes nonexistent temp paths; with none existing,
-        // the list becomes empty (missing files are never surfaced).
         assert!(out.recent_files.files.is_empty());
     }
 
