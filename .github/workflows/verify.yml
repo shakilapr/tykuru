@@ -6,6 +6,7 @@ on:
     branches: [main]
 
 jobs:
+  # Frontend gates: platform-independent, no Typst sidecar required.
   verify:
     runs-on: ubuntu-latest
     steps:
@@ -30,35 +31,32 @@ jobs:
         # reported but non-blocking until they are remediated, so CI stays green.
         continue-on-error: true
         run: pnpm audit
-      - name: Install Rust toolchain
+
+  # Rust gates: must run on Windows because the Tauri backend embeds the
+  # Windows-only Typst sidecar (`externalBin`); tauri-build hard-fails at compile
+  # time on any other target triple where the sidecar file is absent.
+  rust:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Rust toolchain (MSVC)
         uses: dtolnay/rust-toolchain@stable
         with:
+          targets: x86_64-pc-windows-msvc
           components: rustfmt, clippy
-      - name: Install Tauri Linux system dependencies
-        # The backend links against GTK/WebKit (wry/tao); these system libraries
-        # are required to compile clippy/test on the Ubuntu runner even though
-        # the app targets Windows. Official Tauri 2 Debian/Ubuntu dependency set.
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libxdo-dev \
-            libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev
+      - name: Fetch and verify pinned Typst binary
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/fetch_typst.ps1
       - name: Rust formatting
         run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
       - name: Rust clippy
         run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
-      - name: Rust unit tests
-        # `--lib` only: the integration tests (tests/compiler.rs) drive the real
-        # Typst sidecar, which is Windows-only and not present on this runner.
-        # They run in the `typst-fixtures`/`windows-e2e` jobs instead.
-        run: cargo test --lib --manifest-path src-tauri/Cargo.toml
+      - name: Rust tests (incl. real-sidecar integration tests)
+        # The Windows sidecar is present, so tests/compiler.rs can run.
+        run: cargo test --manifest-path src-tauri/Cargo.toml
 
   # Real-Typst compatibility gate (architecture §24.3): compile every fully
   # local fixture against the pinned official Typst sidecar and assert the
@@ -72,24 +70,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install Rust toolchain (MSVC)
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-pc-windows-msvc
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
       - name: Fetch and verify pinned Typst binary
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/fetch_typst.ps1
       - name: Verify fixtures against real Typst
         run: pnpm typst:fixtures
-      - name: Rust integration tests (real sidecar)
-        # The sidecar is present here, so the Windows-gated compiler integration
-        # tests (tests/compiler.rs) can run.
-        run: cargo test --manifest-path src-tauri/Cargo.toml
 
   windows-e2e:
     runs-on: windows-latest
-    needs: verify
+    needs: [verify, rust]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

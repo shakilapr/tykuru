@@ -5,7 +5,7 @@ $ErrorActionPreference = "Stop"
 
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $versionsPath = Join-Path $root "config/versions.toml"
-$sidecarPath = Join-Path $root "src-tauri/binaries/typst-x86_64-pc-windows-msvc.exe"
+$sidecarPath = Join-Path $root "src-tauri/binaries/typst-x86_64-pc-windows-msvc-x86_64-pc-windows-msvc.exe"
 
 if (-not (Test-Path $sidecarPath)) {
     Write-Error "Sidecar missing: $sidecarPath. Run scripts/fetch_typst.ps1 first."

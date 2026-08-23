@@ -1,15 +1,20 @@
 # Fetches the official Typst release binary and verifies its SHA-256.
 #
 # The sidecar is git-ignored (large generated binary). Run this script on a
-# fresh clone or in CI to obtain src-tauri/binaries/typst-x86_64-pc-windows-msvc.exe
-# matching the version/checksum pinned in config/versions.toml.
+# fresh clone or in CI to obtain the bundled Typst binary matching the version/
+# checksum pinned in config/versions.toml.
+#
+# Tauri `externalBin` requires the file to carry the target-triple suffix, i.e.
+# `typst-x86_64-pc-windows-msvc-x86_64-pc-windows-msvc.exe` for an MSVC build.
+# The MSVC suffix is what the bundled official Typst release maps to.
 
 $ErrorActionPreference = "Stop"
 
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $versionsPath = Join-Path $root "config/versions.toml"
 $binDir = Join-Path $root "src-tauri/binaries"
-$sidecarName = "typst-x86_64-pc-windows-msvc.exe"
+# externalBin entry + target triple + extension (architecture §6.2.1).
+$sidecarName = "typst-x86_64-pc-windows-msvc-x86_64-pc-windows-msvc.exe"
 $sidecarPath = Join-Path $binDir $sidecarName
 
 # Parse minimal TOML values we need (no external TOML parser dependency).
