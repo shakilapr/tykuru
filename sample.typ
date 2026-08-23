@@ -153,7 +153,7 @@
   #badge("DOI: 10.1000/tykuru.2026.08", color: rgb("#2563eb"))
   #h(6pt)
   #badge("OPEN SOURCE SPECIFICATION", color: rgb("#7c3aed"))
-  
+
   #v(0.8em)
   #text(
     size: 22pt,
@@ -164,14 +164,14 @@
     Universal Typesetting & Rendering Verification:\
     A Multi-Domain Typst Paradigm Analysis
   ]
-  
+
   #v(0.5em)
   #text(size: 11pt, style: "italic", fill: rgb("#4b5563"))[
     Comprehensive Benchmark Specification for the Tykuru Compilation & Preview Engine
   ]
 
   #v(1.2em)
-  
+
   // Author Grid
   #grid(
     columns: (1fr, 1fr, 1fr),
@@ -201,7 +201,7 @@
       ]
     ]
   )
-  
+
   #v(0.8em)
   #text(size: 8.5pt, fill: rgb("#6b7280"))[Received: August 15, 2026 / Accepted: August 23, 2026 / Published Online: August 24, 2026]
 ]
@@ -220,7 +220,7 @@
     #align(left)[
       #text(weight: "bold", size: 10pt, font: ("Segoe UI", "Arial", "Calibri", "DejaVu Sans"), fill: rgb("#0f172a"))[Abstract] ---
       This document serves as the canonical, multi-faceted verification suite and feature showcase for the *Tykuru* desktop application, its embedded Typst compiler sidecar, and its PDF.js preview engine. We evaluate rich typographic features, complex mathematical formulations, multi-line aligned proofs, interactive and styled data tables, vector diagrams synthesized with native graphics primitives, multi-language source code highlighting, and functional data-driven visualizations. Furthermore, we test bibliographical citation structures against classical foundational works (@shannon1948; @knuth1984; @turing1936; @lamport1994; @vaswani2017). The goal of this test suite is to guarantee absolute rendering fidelity, rock-solid stability across page boundaries, and seamless cross-platform performance.
-      
+
       #v(0.6em)
       #line(length: 100%, stroke: 0.4pt + rgb("#e2e8f0"))
       #v(0.3em)
@@ -271,7 +271,7 @@ Document pipelines must handle UTF-8 symbols, sub/superscripts, chemical formula
 
 == Footnotes, Quotes and Admonitions
 
-Inline references trigger automatic numbering and placement in page footers #footnote[Footnotes automatically track page flow and isolate footnotes per physical page.]. 
+Inline references trigger automatic numbering and placement in page footers #footnote[Footnotes automatically track page flow and isolate footnotes per physical page.].
 
 #quote(block: true, attribution: [Donald E. Knuth, *Literate Programming* (1984)])[
   "Let us change our traditional attitude to the construction of programs: Instead of imagining that our main task is to instruct a computer what to do, let us concentrate rather on explaining to human beings what we want a computer to do."
@@ -389,14 +389,14 @@ Rigorous computer science literature requires structured theorem boxes, definiti
       #v(0.3em)
       #line(length: 100%, stroke: 0.5pt + rgb("#cbd5e1"))
       #v(0.4em)
-      
+
       #set text(size: 8.5pt, font: ("Consolas", "Cascadia Code", "Courier New", "DejaVu Sans Mono"))
       *Input:* Old document AST $cal(T)_"prev"$, incoming keystroke delta $Delta_k$, Session identifier $S_"id"$\
       *Output:* Updated revision token $cal(R)_"committed"$, dirty bounding region $cal(B)$\
-      
+
       #line(length: 100%, stroke: 0.4pt + rgb("#e2e8f0"))
       #v(0.3em)
-      
+
       #grid(
         columns: (2.5em, 1fr),
         row-gutter: 0.4em,
@@ -445,13 +445,13 @@ Scientific documentation requires tables with merged cells (`colspan` / `rowspan
       else if col >= 2 and col <= 4 { right + horizon }
       else { left + horizon }
     },
-    
+
     // Top-Level Multi-column Header
     table.cell(colspan: 1, rowspan: 2)[#text(fill: white, weight: "bold")[Fixture ID]],
     table.cell(colspan: 1, rowspan: 2)[#text(fill: white, weight: "bold")[Module / Category]],
     table.cell(colspan: 3)[#text(fill: white, weight: "bold")[Performance Metrics (ms)]],
     table.cell(colspan: 1, rowspan: 2)[#text(fill: white, weight: "bold")[Compilation Status]],
-    
+
     // Sub-headers
     [#text(weight: "bold", size: 8.5pt)[AST Parse]],
     [#text(weight: "bold", size: 8.5pt)[Layout Eval]],
@@ -491,7 +491,7 @@ Below is a schematic of the Tykuru system architecture, rendered with native Typ
     #grid(
       columns: (1fr, 40pt, 1fr, 40pt, 1fr),
       align: center + horizon,
-      
+
       // Node 1: Editor Layer
       rect(
         width: 100%,
@@ -506,13 +506,13 @@ Below is a schematic of the Tykuru system architecture, rendered with native Typ
           #badge("UI Thread", color: rgb("#2563eb"))
         ]
       ],
-      
+
       // Arrow 1
       [
         #text(size: 14pt, fill: rgb("#64748b"))[$arrow.r.double$]\
         #text(size: 6.5pt, fill: rgb("#94a3b8"))[Tauri IPC]
       ],
-      
+
       // Node 2: Rust Host Core
       rect(
         width: 100%,
@@ -527,13 +527,13 @@ Below is a schematic of the Tykuru system architecture, rendered with native Typ
           #badge("Native Backend", color: rgb("#d97706"))
         ]
       ],
-      
+
       // Arrow 2
       [
         #text(size: 14pt, fill: rgb("#64748b"))[$arrow.r.double$]\
         #text(size: 6.5pt, fill: rgb("#94a3b8"))[CLI Watcher]
       ],
-      
+
       // Node 3: Typst Compiler & PDF.js
       rect(
         width: 100%,
@@ -574,7 +574,7 @@ As illustrated in @fig-project-logo, the project logo is integrated directly int
     columns: (1fr, 1fr),
     gutter: 1.5cm,
     align: center + horizon,
-    
+
     // Left: Coordinate Shapes
     block(stroke: 0.5pt + rgb("#cbd5e1"), inset: 10pt, radius: 4pt)[
       #text(weight: "bold", size: 9pt)[Geometric Primitives]\
@@ -600,7 +600,7 @@ As illustrated in @fig-project-logo, the project logo is integrated directly int
         (0.7cm, 0.8cm),
       )
     ],
-    
+
     // Right: Set Theory Euler Diagram
     block(stroke: 0.5pt + rgb("#cbd5e1"), inset: 10pt, radius: 4pt)[
       #text(weight: "bold", size: 9pt)[Set Theory & Intersections]\
