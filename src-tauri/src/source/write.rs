@@ -144,7 +144,12 @@ mod tests {
     use super::*;
 
     fn temp_entry(name: &str) -> std::path::PathBuf {
-        let path = std::env::temp_dir().join(format!("tykuru_src_{name}.typ"));
+        // Each test gets its own subdirectory so parallel test threads cannot
+        // observe each other's temp-sibling files in the shared temp dir.
+        let dir = std::env::temp_dir().join(format!("tykuru_src_tests_{name}"));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("entry.typ");
         fs::write(&path, b"initial").expect("write");
         path
     }
