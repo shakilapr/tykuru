@@ -51,9 +51,16 @@ describe("Toolbar", () => {
 
   it("every icon-only button has an aria-label", () => {
     renderWithTheme(<Toolbar onOpen={() => {}} previewActive />);
-    for (const name of ["Open .typ", "Set project root…", "Toggle editor", "Zoom out", "Zoom in"]) {
+    for (const name of ["Open .typ", "Set project root…", "Show editor", "Zoom out", "Zoom in"]) {
       expect(screen.getByRole("button", { name })).toBeInTheDocument();
     }
+  });
+
+  it("editor toggle reflects visible state in its aria-label", () => {
+    renderWithTheme(<Toolbar onOpen={() => {}} previewActive />);
+    const btn = screen.getByRole("button", { name: "Show editor" });
+    fireEvent.click(btn);
+    expect(screen.getByRole("button", { name: "Hide editor" })).toBeInTheDocument();
   });
 });
 

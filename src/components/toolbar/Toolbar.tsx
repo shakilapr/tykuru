@@ -1,4 +1,4 @@
-import { FolderOpen, FolderTree, PanelRight, ZoomIn, ZoomOut, type LucideIcon } from "lucide-react";
+import { FolderOpen, FolderTree, PanelLeft, ZoomIn, ZoomOut, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
@@ -32,12 +32,23 @@ function IconButton({ icon: Icon, label, onClick, disabled }: { icon: LucideIcon
 }
 
 export function Toolbar({ filename, compileStatus, onOpen, onSetProjectRoot, onZoomIn, onZoomOut, previewActive }: ToolbarProps) {
-  const { toggleEditor } = useAppState();
+  const { editorVisible, toggleEditor } = useAppState();
+  const editorLabel = editorVisible ? "Hide editor" : "Show editor";
   return (
     <header className="flex h-12 items-center gap-2 border-b border-border px-2">
       <IconButton icon={FolderOpen} label="Open .typ" onClick={onOpen} />
       <IconButton icon={FolderTree} label="Set project root…" onClick={onSetProjectRoot} disabled={!filename} />
-      <IconButton icon={PanelRight} label="Toggle editor" onClick={toggleEditor} />
+      <Tooltip label={editorLabel}>
+        <Button
+          variant={editorVisible ? "outline" : "ghost"}
+          size="default"
+          aria-label={editorLabel}
+          onClick={toggleEditor}
+        >
+          <PanelLeft size={18} aria-hidden />
+          <span>Editor</span>
+        </Button>
+      </Tooltip>
       <Separator orientation="vertical" className="mx-1 h-6" />
       <span className="min-w-0 flex-1 truncate text-sm" title={filename}>
         {filename ?? "No document"}
