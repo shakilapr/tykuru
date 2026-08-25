@@ -5,7 +5,7 @@
 //! session ownership lives in `OpenRequestRouter` and `SessionManager`.
 
 use serde::Serialize;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
 
 use crate::app_state::AppState;
@@ -274,6 +274,13 @@ fn register_session(
     }
     drop(manager);
 
+    // Ensure the session cache directory exists before the typst watcher and
+    // candidate watcher write into it (architecture §17: all generated output
+    // is bounded under this per-session dir). A failure here means the preview
+    // pipeline cannot work, so the open fails loudly rather than silently.
+    std::fs::create_dir_all(&session.cache_dir)
+        .map_err(|e| CommandError::OpenRequest(OpenRequestError::Canonicalize(e)))?;
+
     // Push the opened entry onto the bounded recent-files list and persist
     // (§18). Best-effort: a settings I/O failure must not fail the open.
     if let Ok(mut settings) = state.settings_store.load() {
@@ -313,6 +320,14 @@ fn register_session(
             .map_err(|_| CommandError::LockPoisoned)?;
         *guard = source_watcher.ok();
     }
+    // Stop any watcher left over from the previous session before starting the
+    // new one: `SessionManager::open` replaces the active session, but the old
+    // `typst watch` child would otherwise still hold the single-watcher slot
+    // and make `start_watch` refuse (architecture §8.2). `stop` no-ops when no
+    // watcher is running. Mirrors the stop-then-start in `set_project_root`.
+    if let Err(e) = crate::compiler::stop_watch(&app) {
+        log::warn!("register_session: failed to stop previous watcher: {e}");
+    }
     // Start the live `typst watch` so source changes refresh the preview
     // (Stage 6). The watcher writes candidate.pdf; the candidate watcher turns
     // it into immutable revisions.
@@ -325,7 +340,22 @@ fn register_session(
         reg.remove(&id);
     }
 
-    Ok(summarize(&session))
+    let summary = summarize(&session);
+    emit_session_opened(&app, &summary);
+    Ok(summary)
+}
+
+/// Emits `session-opened` so the frontend can switch from the start screen to
+/// the editor. Called after every successful open, regardless of origin (file
+/// dialog, argv/Open With, drag-drop, single-instance forwarding).
+///
+/// Tauri events are not buffered: an argv open that completes during `.setup()`
+/// fires before the React page mounts its listener. The frontend therefore also
+/// polls `get_active_session` on mount (see `App.tsx`), so a missed event here
+/// is harmless; emitting still covers opens that happen while the UI is already
+/// showing.
+fn emit_session_opened<R: tauri::Runtime>(app: &tauri::AppHandle<R>, summary: &SessionSummary) {
+    let _ = app.emit("session-opened", summary);
 }
 
 fn summarize(session: &crate::session::DocumentSession) -> SessionSummary {
