@@ -53,15 +53,5 @@
         "displayLanguageSelector": false
       }
     }
-  },
-  "plugins": {
-    "shell": {
-      "sidecar": [
-        {
-          "bin": "typst",
-          "args": true
-        }
-      ]
-    }
   }
 }
