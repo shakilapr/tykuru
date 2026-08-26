@@ -13,6 +13,7 @@ src-tauri/binaries/typst-*
 *.pdb
 
 # Generated PDFs (committed fixtures are source; only GENERATED output is ignored)
+*.pdf
 **/out/*.pdf
 *.generated.pdf
 candidate.pdf
@@ -44,3 +45,12 @@ Desktop.ini
 
 # Committed on purpose (do NOT ignore):
 # Cargo.lock, pnpm-lock.yaml, components.json, src/**
+failure_report.md
+
+
+
+
+*.png
+
+# Handover notes (written for AI-model task continuation; never committed)
+handover*.md
