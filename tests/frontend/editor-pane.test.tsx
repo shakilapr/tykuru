@@ -53,9 +53,9 @@ describe("EditorPane", () => {
     readSource.mockResolvedValue({
       sessionId: "sid-1",
       content: "= Hello\nworld",
-      diskRevision: "rev-1",
+      disk_revision: "rev-1",
     });
-    saveSource.mockResolvedValue({ diskRevision: "rev-2" });
+    saveSource.mockResolvedValue({ disk_revision: "rev-2" });
   });
 
   afterEach(() => {

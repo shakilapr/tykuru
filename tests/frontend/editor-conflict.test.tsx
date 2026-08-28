@@ -76,10 +76,10 @@ describe("EditorPane conflict flow", () => {
     readSource.mockResolvedValue({
       sessionId: "sid-1",
       content: "= Hello\nworld",
-      diskRevision: "rev-1",
+      disk_revision: "rev-1",
     });
-    saveSource.mockResolvedValue({ diskRevision: "rev-2" });
-    resolveConflict.mockResolvedValue({ diskRevision: "rev-keep" });
+    saveSource.mockResolvedValue({ disk_revision: "rev-2" });
+    resolveConflict.mockResolvedValue({ disk_revision: "rev-keep" });
   });
 
   it("silent clean reload on external change while clean", async () => {
@@ -90,7 +90,7 @@ describe("EditorPane conflict flow", () => {
     readSource.mockResolvedValueOnce({
       sessionId: "sid-1",
       content: "= Hello\nexternally edited",
-      diskRevision: "rev-B",
+      disk_revision: "rev-B",
     });
     emitSourceChanged("sid-1", "rev-B");
 
@@ -152,7 +152,7 @@ describe("EditorPane conflict flow", () => {
     readSource.mockResolvedValueOnce({
       sessionId: "sid-1",
       content: "= Newer external C",
-      diskRevision: "rev-C",
+      disk_revision: "rev-C",
     });
 
     const keep = await screen.findByText("Keep my version");
@@ -162,7 +162,7 @@ describe("EditorPane conflict flow", () => {
 
     await screen.findByText(/changed again/i);
     // The next Keep attempt should target the refreshed revision C.
-    resolveConflict.mockResolvedValueOnce({ diskRevision: "rev-keep" });
+    resolveConflict.mockResolvedValueOnce({ disk_revision: "rev-keep" });
     const keep2 = await screen.findByText("Keep my version");
     act(() => {
       keep2.click();
@@ -183,7 +183,7 @@ describe("EditorPane conflict flow", () => {
     readSource.mockResolvedValueOnce({
       sessionId: "sid-1",
       content: "= Disk wins",
-      diskRevision: "rev-B",
+      disk_revision: "rev-B",
     });
     const reload = await screen.findByText("Reload external");
     act(() => {

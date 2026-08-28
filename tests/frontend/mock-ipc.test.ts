@@ -39,8 +39,8 @@ describe("browser-mode IPC mock", () => {
     const snap = await readSource("mock-session-123");
     expect(snap.content).toContain("Tykuru Sample File");
 
-    const result = await saveSource("mock-session-123", "new content", snap.diskRevision);
-    expect(result.diskRevision).toBe("2");
+    const result = await saveSource("mock-session-123", "new content", snap.disk_revision);
+    expect(result.disk_revision).toBe("2");
     const after = await readSource("mock-session-123");
     expect(after.content).toBe("new content");
   });

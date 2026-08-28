@@ -41,13 +41,13 @@ async function invoke<T>(cmd: string, args?: MockArgs): Promise<T> {
       return result as unknown as T;
     }
     case "read_source_command":
-      return { sessionId: MOCK_SESSION_ID, content: mockContent, diskRevision: "1" } as unknown as T;
+      return { session_id: MOCK_SESSION_ID, content: mockContent, disk_revision: "1" } as unknown as T;
     case "save_source_command":
       if (typeof args?.content === "string") mockContent = args.content;
-      return { diskRevision: "2" } as unknown as T;
+      return { disk_revision: "2" } as unknown as T;
     case "resolve_source_conflict_keep_local_command":
       if (typeof args?.content === "string") mockContent = args.content;
-      return { diskRevision: "2" } as unknown as T;
+      return { disk_revision: "2" } as unknown as T;
     case "get_preview_pdf_command": {
       // Browser mode has no real compiled PDF; return an empty buffer so the
       // viewer shows an empty canvas rather than erroring on missing IPC.
@@ -114,13 +114,13 @@ export async function getPreviewPdf(sessionId: string, revision: number): Promis
 }
 
 export interface SourceSnapshot {
-  sessionId: string;
+  session_id: string;
   content: string;
-  diskRevision: string;
+  disk_revision: string;
 }
 
 export interface SaveResult {
-  diskRevision: string;
+  disk_revision: string;
 }
 
 export async function readSource(sessionId: string): Promise<SourceSnapshot> {

@@ -62,7 +62,7 @@ export function EditorPane({
       bufferRef.current = snapshot.content;
       dirtyRef.current = false;
       lastSavedContentRef.current = snapshot.content;
-      setEditorState((s) => markLoaded(s, snapshot.content, snapshot.diskRevision));
+      setEditorState((s) => markLoaded(s, snapshot.content, snapshot.disk_revision));
       setExternalValue(snapshot.content);
       syncRef.current.cleanReload();
     } catch (e) {
@@ -97,7 +97,7 @@ export function EditorPane({
         .then((result) => {
           dirtyRef.current = false;
           lastSavedContentRef.current = content;
-          setEditorState((prev) => markSaved(prev, content, result.diskRevision));
+          setEditorState((prev) => markSaved(prev, content, result.disk_revision));
           syncRef.current.saved();
         })
         .catch((e) => {
@@ -124,7 +124,7 @@ export function EditorPane({
         bufferRef.current = snapshot.content;
         dirtyRef.current = false;
         lastSavedContentRef.current = snapshot.content;
-        setEditorState((s) => markLoaded(s, snapshot.content, snapshot.diskRevision));
+        setEditorState((s) => markLoaded(s, snapshot.content, snapshot.disk_revision));
         setExternalValue(snapshot.content);
         syncRef.current.cleanReload();
       })
@@ -173,7 +173,7 @@ export function EditorPane({
         const snapshot = await readSource(id);
         dirtyRef.current = false;
         lastSavedContentRef.current = content;
-        setEditorState((s) => markSaved(s, content, snapshot.diskRevision));
+        setEditorState((s) => markSaved(s, content, snapshot.disk_revision));
         sync.saved();
       } catch {
         /* leave state as-is */
@@ -185,7 +185,7 @@ export function EditorPane({
       if (!id) return;
       try {
         const snapshot = await readSource(id);
-        sync.refreshConflict(snapshot.diskRevision);
+        sync.refreshConflict(snapshot.disk_revision);
       } catch {
         /* leave state as-is */
       }
